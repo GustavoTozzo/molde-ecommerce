@@ -105,36 +105,38 @@ export function AvisoReceita() {
 export function ResumoValores({ resumo }: { resumo: ResumoCarrinho }) {
   const parcela = parcelamento(resumo.total, site.loja.parcelasMax, site.loja.parcelaMinima);
   return (
-    <dl className="space-y-2 text-sm">
-      <div className="flex justify-between">
-        <dt className="text-muted">Subtotal</dt>
-        <dd className="font-semibold">{formatBRL(resumo.subtotal)}</dd>
-      </div>
-      {resumo.economiaAssinatura > 0 && (
-        <div className="flex justify-between text-forest-dark">
-          <dt>Economia com assinatura (já aplicada)</dt>
-          <dd className="font-semibold">−{formatBRL(resumo.economiaAssinatura)}</dd>
+    <div>
+      <dl className="space-y-2 text-sm">
+        <div className="flex justify-between">
+          <dt className="text-muted">Subtotal</dt>
+          <dd className="font-semibold">{formatBRL(resumo.subtotal)}</dd>
         </div>
-      )}
-      {resumo.descontoCupom > 0 && (
-        <div className="flex justify-between text-forest-dark">
-          <dt>Cupom</dt>
-          <dd className="font-semibold">−{formatBRL(resumo.descontoCupom)}</dd>
+        {resumo.economiaAssinatura > 0 && (
+          <div className="flex justify-between text-forest-dark">
+            <dt>Economia com assinatura (já aplicada)</dt>
+            <dd className="font-semibold">−{formatBRL(resumo.economiaAssinatura)}</dd>
+          </div>
+        )}
+        {resumo.descontoCupom > 0 && (
+          <div className="flex justify-between text-forest-dark">
+            <dt>Cupom</dt>
+            <dd className="font-semibold">−{formatBRL(resumo.descontoCupom)}</dd>
+          </div>
+        )}
+        <div className="flex justify-between">
+          <dt className="text-muted">Frete</dt>
+          <dd className="font-semibold">{resumo.linhas.length === 0 ? "—" : resumo.frete === 0 ? "Grátis" : formatBRL(resumo.frete)}</dd>
         </div>
-      )}
-      <div className="flex justify-between">
-        <dt className="text-muted">Frete</dt>
-        <dd className="font-semibold">{resumo.linhas.length === 0 ? "—" : resumo.frete === 0 ? "Grátis" : formatBRL(resumo.frete)}</dd>
-      </div>
-      <div className="flex items-baseline justify-between border-t border-line pt-3">
-        <dt className="text-base font-bold">Total</dt>
-        <dd className="font-display text-2xl font-bold">{formatBRL(resumo.total)}</dd>
-      </div>
+        <div className="flex items-baseline justify-between border-t border-line pt-3">
+          <dt className="text-base font-bold">Total</dt>
+          <dd className="font-display text-2xl font-bold">{formatBRL(resumo.total)}</dd>
+        </div>
+      </dl>
       {resumo.total > 0 && (
-        <p className="text-right text-xs text-muted">
+        <p className="mt-2 text-right text-xs text-muted">
           ou {parcela.parcelas}x de {formatBRL(parcela.valor)} sem juros
         </p>
       )}
-    </dl>
+    </div>
   );
 }

@@ -204,8 +204,11 @@ export function HeroCarrossel() {
                 aria-selected={i === indice}
                 aria-label={`Ir para o slide ${i + 1}`}
                 onClick={() => ir(i)}
-                className={cn("h-2.5 rounded-full transition-all", i === indice ? "w-7 bg-forest" : "w-2.5 bg-line hover:bg-sage")}
-              />
+                className="group flex h-6 min-w-6 items-center justify-center px-1"
+              >
+                {/* o botão tem 24 px de área de toque (WCAG 2.5.8); o ponto desenhado é menor */}
+                <span className={cn("block h-2.5 rounded-full transition-all", i === indice ? "w-7 bg-forest" : "w-2.5 bg-line group-hover:bg-sage")} />
+              </button>
             ))}
           </div>
           <button type="button" onClick={() => setPausadoManual((p) => !p)} aria-label={pausadoManual ? "Retomar apresentação" : "Pausar apresentação"} className="flex size-9 items-center justify-center rounded-full text-ink hover:bg-mint">

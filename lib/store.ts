@@ -155,11 +155,22 @@ export function fecharCarrinho() {
   definir({ carrinhoAberto: false }, false);
 }
 
+/**
+ * Favoritos alternados entre o instante em que a sincronização com a conta saiu (o instantâneo enviado
+ * ao servidor) e o instante em que a resposta chegou. Sem isso, um clique nesse intervalo seria
+ * sobrescrito pela lista que o servidor devolve.
+ */
+const alternadosDuranteSincronizacao = new Set<string>();
+let sincronizando = false;
+
 export function alternarFavorito(produto: { slug: string; nome: string }) {
   const ja = state.favoritos.includes(produto.slug);
   const antes = state.favoritos;
   definir({ favoritos: ja ? antes.filter((s) => s !== produto.slug) : [...antes, produto.slug] });
   mostrarAviso(ja ? `${produto.nome} removido dos favoritos` : `${produto.nome} salvo nos favoritos`);
+  if (!state.logado && sincronizando) {
+    if (!alternadosDuranteSincronizacao.delete(produto.slug)) alternadosDuranteSincronizacao.add(produto.slug);
+  }
   if (state.logado) {
     // Atualização otimista: a tela muda na hora e o servidor confirma; se falhar, desfaz.
     alternarFavoritoNoServidor(produto.slug).catch(() => {
@@ -169,16 +180,33 @@ export function alternarFavorito(produto: { slug: string; nome: string }) {
   }
 }
 
+/** Instantâneo enviado ao servidor na sincronização; a partir daqui, cliques são reaplicados quando a resposta chegar. */
 export function favoritosAtuais(): string[] {
   carregar();
+  sincronizando = true;
+  alternadosDuranteSincronizacao.clear();
   return state.favoritos;
 }
 
 /** Chamado pelo servidor (via <SincronizarConta />) a cada carga: diz se há sessão e, com ela, traz os favoritos da conta. */
 export function definirSessao(logado: boolean, favoritosDaConta?: string[]) {
+  sincronizando = false;
   if (logado) {
-    definir({ logado: true, ...(favoritosDaConta && { favoritos: favoritosDaConta, favoritosDeConta: true }) });
+    let lista = favoritosDaConta;
+    if (lista && alternadosDuranteSincronizacao.size > 0) {
+      // Reaplica sobre a lista do servidor os cliques feitos enquanto a resposta não chegava.
+      const final = new Set(lista);
+      for (const slug of alternadosDuranteSincronizacao) {
+        if (final.has(slug)) final.delete(slug);
+        else final.add(slug);
+        alternarFavoritoNoServidor(slug).catch(() => {});
+      }
+      lista = [...final];
+    }
+    alternadosDuranteSincronizacao.clear();
+    definir({ logado: true, ...(lista && { favoritos: lista, favoritosDeConta: true }) });
   } else if (state.favoritosDeConta) {
+    alternadosDuranteSincronizacao.clear();
     // Saiu da conta (ou a sessão expirou): não deixa os favoritos dela num navegador possivelmente compartilhado.
     definir({ logado: false, favoritos: [], favoritosDeConta: false });
   } else if (state.logado) {

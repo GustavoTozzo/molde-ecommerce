@@ -37,7 +37,7 @@ export function SimuladorAssinatura() {
           className="mt-3 h-2 w-full cursor-pointer accent-amber"
           aria-valuetext={formatBRL(gasto)}
         />
-        <div className="mt-1 flex justify-between text-xs text-white/60">
+        <div className="mt-1 flex justify-between text-xs text-white/80">
           <span>R$ 100</span>
           <span>R$ 600</span>
         </div>
@@ -52,8 +52,8 @@ export function SimuladorAssinatura() {
             <dt className="text-sm text-muted">Economia em 12 meses</dt>
             <dd className="font-display text-5xl font-extrabold text-forest">{formatBRL(anual)}</dd>
           </div>
-          <div className="text-sm font-semibold">{frete ? "✓ Frete grátis em todas as entregas" : `Frete grátis acima de ${formatBRL(site.loja.freteGratisAcima)}`}</div>
         </dl>
+        <p className="mt-4 text-sm font-semibold">{frete ? "✓ Frete grátis em todas as entregas" : `Frete grátis acima de ${formatBRL(site.loja.freteGratisAcima)}`}</p>
         <LinkBotao href="/produtos" variante="primario" tamanho="l" className="mt-6 w-full">
           Montar minha assinatura
         </LinkBotao>

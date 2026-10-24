@@ -13,7 +13,7 @@ Estudo que originou o layout: [`docs/estudo-de-referencia.md`](docs/estudo-de-re
 - [x] **Fase 3** — Contas e autenticação (Auth.js, cadastro, login, área do cliente, favoritos persistidos) — decisões em [`docs/decisoes-fase-3.md`](docs/decisoes-fase-3.md)
 - [x] **Fase 4** — Checkout real (pedido em transação, estoque, cupons no servidor, pagamento simulado, upload de receita) — decisões em [`docs/decisoes-fase-4.md`](docs/decisoes-fase-4.md)
 - [x] **Fase 5** — Painel administrativo (pedidos, fila de receitas, produtos e estoque, cupons, mensagens, usuários) — decisões em [`docs/decisoes-fase-5.md`](docs/decisoes-fase-5.md)
-- [ ] **Fase 6** — Testes de navegador dentro do repositório, CI (GitHub Actions) e revisão de acessibilidade/desempenho
+- [x] **Fase 6** — Testes de navegador (Playwright) dentro do repositório, acessibilidade automatizada (axe) e CI (GitHub Actions) — decisões em [`docs/decisoes-fase-6.md`](docs/decisoes-fase-6.md)
 - [ ] **Fase 7** — Publicação (GitHub, Neon, Vercel)
 - [ ] **Fase 8** — Preparação para migrar o catálogo e o checkout para a Shopify
 
@@ -37,8 +37,19 @@ npm run db:seed                # catálogo, conteúdo, cupons e 3 usuários de d
 npm run dev                    # http://localhost:3000
 npm run build && npm run start
 npm run typecheck && npm run lint
-npm run test                   # integração do pedido (precisa do banco local)
 ```
+
+### Testes
+
+```bash
+npm run test                   # integração (Node): pedido, estoque, cupom, limitador. Banco local no ar
+npm run build && npm run test:e2e   # Playwright: site, celular, conta, checkout, painel e acessibilidade (axe)
+```
+
+- Os testes **escrevem no banco** (pedidos, usuários `teste.*`, produtos `produto-teste-*`) e restauram o estado do seed ao final; por segurança recusam rodar contra qualquer banco que não seja local ou de CI.
+- `npm run test:e2e` sobe o app compilado na porta 3100 sozinho, entra uma vez por papel (cliente, farmacêutica, administrador) e reaproveita a sessão. Localmente usa o Google Chrome instalado; no CI, o Chromium do Playwright.
+- `LIMITES_RELAXADOS=1` (definido só pelo `playwright.config.ts`) afrouxa o limite de tentativas para a suíte criar muitas contas; **nunca** defina em produção.
+- O CI (`.github/workflows/ci.yml`) roda em cada push e pull request: Postgres de serviço, migrações, seed, tipos, lint, integração, build e Playwright.
 
 Comandos úteis: `npm run db:migrate` (cria migração a partir de mudanças no `schema.prisma`), `npm run db:studio` (navegador de dados), `npm run db:seed` (idempotente: pode rodar de novo sem duplicar nada).
 
@@ -63,7 +74,7 @@ Criados por `npm run db:seed` com os valores de `.env` (padrões em `.env.exampl
 - **Contato e newsletter** gravam no banco e aparecem no painel.
 - **Acessibilidade e segurança:** link "pular para o conteúdo", foco visível, `aria-*`, cabeçalhos HTTP (CSP, HSTS, `nosniff`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`).
 
-Verificação: build de produção lendo do Postgres, `tsc` e `eslint` sem erros, **24 testes de integração** (`npm run test`, inclui compras simultâneas disputando o último estoque) e, em Chrome headless, 55 verificações do site público, 37 de conta, 35 de checkout e 66 do painel (as suítes de navegador ainda ficam fora do repositório; entram na Fase 6).
+Verificação: build de produção lendo do Postgres, `tsc` e `eslint` sem erros, **28 testes de integração** (`npm run test`, inclui compras simultâneas disputando o último estoque) e **79 de ponta a ponta com Playwright** (`npm run test:e2e`: site público, celular, conta, checkout, painel e 25 páginas varridas com axe-core).
 
 ## Estrutura
 

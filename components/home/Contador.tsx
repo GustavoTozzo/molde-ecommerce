@@ -39,7 +39,12 @@ export function Contador({ alvo, sufixo = "", className }: { alvo: number; sufix
   }, [alvo]);
 
   return (
-    <span ref={ref} className={className} aria-label={`${alvo.toLocaleString("pt-BR")}${sufixo}`}>
+    <span ref={ref} className={className}>
+      {/* aria-label em <span> sem papel é proibido: o valor final vai como texto só para leitor de tela */}
+      <span className="sr-only">
+        {alvo.toLocaleString("pt-BR")}
+        {sufixo}
+      </span>
       <span aria-hidden>
         {valor.toLocaleString("pt-BR")}
         {sufixo}

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { signIn, signOut } from "@/auth";
 import { excedeuLimite } from "@/server/limite";
 import { prisma } from "@/server/prisma";
-import { exigirUsuarioNaAcao } from "@/server/sessao";
+import { exigirUsuarioNaAcao, usuarioAtual } from "@/server/sessao";
 import { CAMPOS_ENDERECO, enderecoSchema, errosPorCampo, ipDoCliente, senhaSchema, texto, valoresDe, type EstadoForm } from "@/server/validacao";
 
 const CUSTO_BCRYPT = 12;
@@ -203,9 +203,14 @@ export async function alternarFavoritoNoServidor(slug: string): Promise<boolean>
   return true;
 }
 
-/** No primeiro acesso após o login: junta os favoritos do navegador aos do banco e devolve a lista final. */
-export async function mesclarFavoritos(locais: string[]): Promise<string[]> {
-  const usuario = await exigirUsuarioNaAcao();
+/**
+ * No primeiro acesso após o login: junta os favoritos do navegador aos do banco e devolve a lista final.
+ * Devolve `null` se a sessão acabou no meio do caminho (por exemplo, a pessoa saiu da conta em outra
+ * aba): o navegador então não mexe nos favoritos que tem.
+ */
+export async function mesclarFavoritos(locais: string[]): Promise<string[] | null> {
+  const usuario = await usuarioAtual();
+  if (!usuario) return null;
   const slugs = z.array(slugSchema).max(200).parse(locais);
   if (slugs.length > 0) {
     const produtos = await prisma.produto.findMany({ where: { slug: { in: slugs } }, select: { id: true } });

@@ -17,7 +17,7 @@ export function SincronizarConta({ logado }: { logado: boolean }) {
     }
     let cancelado = false;
     mesclarFavoritos(favoritosAtuais())
-      .then((lista) => !cancelado && definirSessao(true, lista))
+      .then((lista) => !cancelado && definirSessao(true, lista ?? undefined))
       .catch(() => !cancelado && definirSessao(true));
     return () => {
       cancelado = true;

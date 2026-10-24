@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualidade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    # O catálogo vem do Postgres e o build do Next o lê (Cache Components), então o banco precisa
+    # estar de pé, migrado e com o seed antes do `next build`.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: casa
+          POSTGRES_PASSWORD: casa
+          POSTGRES_DB: casa_magistral
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U casa -d casa_magistral"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: postgresql://casa:casa@localhost:5432/casa_magistral
+      DIRECT_URL: postgresql://casa:casa@localhost:5432/casa_magistral
+      # Valores só de CI, sem valor fora deste job (banco descartável, nada publicado).
+      AUTH_SECRET: ci-somente-para-testes-0123456789abcdef0123456789abcdef
+      AUTH_URL: http://localhost:3100
+      ADMIN_SEED_EMAIL: admin@casamagistral.exemplo
+      ADMIN_SEED_PASSWORD: dev-admin-2026
+      FARMACEUTICO_SEED_EMAIL: farmaceutica@casamagistral.exemplo
+      FARMACEUTICO_SEED_PASSWORD: dev-farma-2026
+      CLIENTE_SEED_EMAIL: cliente@casamagistral.exemplo
+      CLIENTE_SEED_PASSWORD: dev-cliente-2026
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Banco: migrações e seed
+        run: |
+          npx prisma migrate deploy
+          npm run db:seed
+
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Testes de integração (pedido, estoque, cupom, limitador)
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Instalar o Chromium do Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Testes de ponta a ponta e acessibilidade
+        run: npm run test:e2e
+
+      - name: Relatório do Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

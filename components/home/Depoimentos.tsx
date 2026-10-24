@@ -42,7 +42,7 @@ export function Depoimentos({ itens }: { itens: { nome: string; texto: string }[
             <button type="button" onClick={() => ir(i + 1)} aria-label="Próximo depoimento" className="flex size-11 items-center justify-center rounded-full border border-white/35 transition hover:bg-white hover:text-forest-dark">
               <ArrowRight className="size-5" aria-hidden />
             </button>
-            <p className="ml-auto hidden text-xs text-white/55 sm:block">Depoimentos fictícios de demonstração</p>
+            <p className="ml-auto hidden text-xs text-white/80 sm:block">Depoimentos fictícios de demonstração</p>
           </div>
         </div>
         <div className="hidden items-end justify-center bg-amber-soft pt-10 md:flex" aria-hidden>

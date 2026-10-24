@@ -19,6 +19,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // em cada ação sensível (server/sessao.ts). Sessão curta limita o estrago de um token roubado.
   session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 7 },
   pages: { signIn: "/entrar" },
+  logger: {
+    // Senha errada é um resultado normal, não um erro do servidor: não polui o log a cada tentativa.
+    error(erro) {
+      if ((erro as { type?: string }).type === "CredentialsSignin") return;
+      console.error(erro);
+    },
+  },
   providers: [
     Credentials({
       credentials: {
