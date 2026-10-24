@@ -1,0 +1,5 @@
+* text=auto
+# O Prisma calcula o checksum da migração sobre o conteúdo do arquivo: fixar LF evita
+# "migration was modified" ao clonar no Windows (autocrlf).
+prisma/migrations/**/*.sql text eol=lf
+prisma/migrations/migration_lock.toml text eol=lf

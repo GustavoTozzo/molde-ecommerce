@@ -1,0 +1,387 @@
+// Modelagem documentada em docs/modelagem-dados.md (por que dinheiro é Int em centavos,
+// por que a taxonomia é String, o que é "snapshot" no pedido etc.).
+// Prisma 7: a connection URL não vive aqui, e sim em prisma.config.ts.
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Papel {
+  CLIENTE
+  FARMACEUTICO
+  ADMINISTRADOR
+}
+
+enum StatusPedido {
+  AGUARDANDO_PAGAMENTO
+  AGUARDANDO_RECEITA
+  EM_PREPARO
+  ENVIADO
+  ENTREGUE
+  CANCELADO
+}
+
+enum FormaPagamento {
+  PIX
+  CARTAO
+  BOLETO
+}
+
+enum StatusPagamento {
+  PENDENTE
+  CONFIRMADO
+  FALHOU
+}
+
+enum StatusReceita {
+  PENDENTE
+  APROVADA
+  REJEITADA
+}
+
+enum FrequenciaEntrega {
+  UNICA
+  MENSAL
+  BIMESTRAL
+  TRIMESTRAL
+}
+
+enum StatusAssinatura {
+  ATIVA
+  PAUSADA
+  CANCELADA
+}
+
+enum TipoCupom {
+  PERCENTUAL
+  FRETE_GRATIS
+}
+
+model Usuario {
+  id           String   @id @default(cuid())
+  nome         String
+  email        String   @unique
+  senhaHash    String
+  telefone     String?
+  papel        Papel    @default(CLIENTE)
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  enderecos         Endereco[]
+  pedidos           Pedido[]
+  receitas          Receita[]    @relation("ReceitasDoCliente")
+  receitasRevisadas Receita[]    @relation("ReceitasRevisadas")
+  favoritos         Favorito[]
+  assinaturas       Assinatura[]
+  avaliacoes        Avaliacao[]
+
+  @@map("usuarios")
+}
+
+model Endereco {
+  id          String   @id @default(cuid())
+  usuarioId   String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  apelido     String?
+  cep         String
+  logradouro  String
+  numero      String
+  complemento String?
+  bairro      String
+  cidade      String
+  uf          String
+  principal   Boolean  @default(false)
+  criadoEm    DateTime @default(now())
+
+  @@index([usuarioId])
+  @@map("enderecos")
+}
+
+model Produto {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  nome          String
+  subtitulo     String
+  forma         String
+  objetivos     String[]
+  artKind       String
+  artAccent     String
+  fundo         String
+  selos         String[]
+  sabores       String[]
+  receita       Boolean  @default(false)
+  ativo         Boolean  @default(true)
+  descricao     String[]
+  comoUsar      String   @db.Text
+  ingredientes  String   @db.Text
+  porcao        String
+  tabela        Json
+  faq           Json
+  /// Agregados denormalizados (nota média e total de avaliações exibidos nos cartões).
+  nota          Float    @default(0)
+  qtdAvaliacoes Int      @default(0)
+  vendas        Int      @default(0)
+  /// Posição de lançamento: a ordenação "Novidades" usa o maior valor primeiro.
+  ordem         Int      @default(0)
+  publicadoEm   DateTime @default(now())
+  criadoEm      DateTime @default(now())
+  atualizadoEm  DateTime @updatedAt
+
+  tamanhos      Tamanho[]
+  avaliacoes    Avaliacao[]
+  favoritos     Favorito[]
+  itensPedido   ItemPedido[]
+  assinaturas   Assinatura[]
+  especialistas ProdutoDeEspecialista[]
+  criadores     Criador[]
+
+  @@index([forma])
+  @@index([ativo, publicadoEm])
+  @@map("produtos")
+}
+
+model Tamanho {
+  id        String  @id @default(cuid())
+  produtoId String
+  produto   Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  /// Código curto usado pela vitrine e pelo carrinho (ex.: "60", "30ml", "kit").
+  codigo    String
+  rotulo    String
+  /// Centavos.
+  preco     Int
+  /// Centavos (preço "de", opcional).
+  precoDe   Int?
+  estoque   Int     @default(0)
+  ordem     Int     @default(0)
+
+  itensPedido ItemPedido[]
+  assinaturas Assinatura[]
+
+  @@unique([produtoId, codigo])
+  @@map("tamanhos")
+}
+
+model Especialista {
+  id       String  @id @default(cuid())
+  slug     String  @unique
+  nome     String
+  titulo   String
+  registro String
+  bio      String  @db.Text
+  citacao  String  @db.Text
+  avatar   String
+  ordem    Int     @default(0)
+  ativo    Boolean @default(true)
+
+  selecao ProdutoDeEspecialista[]
+
+  @@map("especialistas")
+}
+
+model ProdutoDeEspecialista {
+  especialistaId String
+  especialista   Especialista @relation(fields: [especialistaId], references: [id], onDelete: Cascade)
+  produtoId      String
+  produto        Produto      @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  ordem          Int          @default(0)
+
+  @@id([especialistaId, produtoId])
+  @@map("produtos_de_especialistas")
+}
+
+model Criador {
+  id        String  @id @default(cuid())
+  handle    String  @unique
+  avatar    String
+  legenda   String
+  produtoId String
+  produto   Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  ordem     Int     @default(0)
+  ativo     Boolean @default(true)
+
+  @@map("criadores")
+}
+
+model Post {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  titulo      String
+  resumo      String
+  categoria   String
+  leitura     String
+  artKind     String
+  artAccent   String
+  fundo       String
+  /// Corpo do artigo em Markdown (preenchido na etapa do blog).
+  corpo       String?  @db.Text
+  publicado   Boolean  @default(true)
+  publicadoEm DateTime @default(now())
+
+  @@map("posts")
+}
+
+model Avaliacao {
+  id           String   @id @default(cuid())
+  produtoId    String
+  produto      Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  usuarioId    String?
+  usuario      Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  nomeExibicao String
+  nota         Int
+  titulo       String
+  texto        String   @db.Text
+  util         Int      @default(0)
+  /// true = avaliação fictícia de demonstração (não veio de compra real).
+  exemplo      Boolean  @default(false)
+  criadoEm     DateTime @default(now())
+
+  @@index([produtoId, criadoEm])
+  @@map("avaliacoes")
+}
+
+model Favorito {
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  produtoId String
+  produto   Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  criadoEm  DateTime @default(now())
+
+  @@id([usuarioId, produtoId])
+  @@map("favoritos")
+}
+
+model Cupom {
+  id         String    @id @default(cuid())
+  codigo     String    @unique
+  tipo       TipoCupom
+  /// Percentual inteiro (ex.: 10 = 10%). Ignorado em FRETE_GRATIS.
+  percentual Int       @default(0)
+  ativo      Boolean   @default(true)
+  validoAte  DateTime?
+  usosMax    Int?
+  usos       Int       @default(0)
+  criadoEm   DateTime  @default(now())
+
+  @@map("cupons")
+}
+
+model Receita {
+  id            String        @id @default(cuid())
+  usuarioId     String
+  usuario       Usuario       @relation("ReceitasDoCliente", fields: [usuarioId], references: [id], onDelete: Cascade)
+  nomeArquivo   String
+  tipoMime      String
+  tamanhoBytes  Int
+  /// Demonstração: o arquivo fica no banco (limite de 4 MB). Em produção, mover para
+  /// armazenamento privado com URL assinada (ver docs/decisoes-fase-4.md).
+  conteudo      Bytes
+  status        StatusReceita @default(PENDENTE)
+  observacao    String?
+  revisadaPorId String?
+  revisadaPor   Usuario?      @relation("ReceitasRevisadas", fields: [revisadaPorId], references: [id], onDelete: SetNull)
+  revisadaEm    DateTime?
+  criadoEm      DateTime      @default(now())
+
+  pedidos Pedido[]
+
+  @@index([status, criadoEm])
+  @@map("receitas")
+}
+
+model Pedido {
+  id              String          @id @default(cuid())
+  numero          Int             @unique @default(autoincrement())
+  usuarioId       String
+  usuario         Usuario         @relation(fields: [usuarioId], references: [id])
+  status          StatusPedido    @default(AGUARDANDO_PAGAMENTO)
+  subtotal        Int
+  descontoCupom   Int             @default(0)
+  frete           Int             @default(0)
+  total           Int
+  cupomCodigo     String?
+  /// Snapshot do endereço no momento da compra (não muda se o cliente editar o cadastro).
+  enderecoEntrega Json
+  formaPagamento  FormaPagamento
+  statusPagamento StatusPagamento @default(PENDENTE)
+  /// Código fictício do pagamento (Pix copia-e-cola, linha digitável do boleto ou autorização do cartão).
+  codigoPagamento String?
+  cartaoFinal4    String?
+  receitaId       String?
+  receita         Receita?        @relation(fields: [receitaId], references: [id])
+  codigoRastreio  String?
+  criadoEm        DateTime        @default(now())
+  atualizadoEm    DateTime        @updatedAt
+
+  itens       ItemPedido[]
+  assinaturas Assinatura[]
+
+  @@index([usuarioId, criadoEm])
+  @@index([status])
+  @@map("pedidos")
+}
+
+model ItemPedido {
+  id            String            @id @default(cuid())
+  pedidoId      String
+  pedido        Pedido            @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  produtoId     String
+  produto       Produto           @relation(fields: [produtoId], references: [id])
+  tamanhoId     String
+  tamanho       Tamanho           @relation(fields: [tamanhoId], references: [id])
+  /// Snapshots: o pedido guarda o que foi vendido, mesmo se o catálogo mudar depois.
+  nome          String
+  tamanhoRotulo String
+  sabor         String?
+  qtd           Int
+  precoTabela   Int
+  precoUnitario Int
+  frequencia    FrequenciaEntrega @default(UNICA)
+
+  @@map("itens_pedido")
+}
+
+model Assinatura {
+  id             String            @id @default(cuid())
+  usuarioId      String
+  usuario        Usuario           @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  produtoId      String
+  produto        Produto           @relation(fields: [produtoId], references: [id])
+  tamanhoId      String
+  tamanho        Tamanho           @relation(fields: [tamanhoId], references: [id])
+  sabor          String?
+  qtd            Int
+  frequencia     FrequenciaEntrega
+  status         StatusAssinatura  @default(ATIVA)
+  proximaEntrega DateTime
+  pedidoOrigemId String
+  pedidoOrigem   Pedido            @relation(fields: [pedidoOrigemId], references: [id])
+  criadoEm       DateTime          @default(now())
+
+  @@index([usuarioId, status])
+  @@map("assinaturas")
+}
+
+model MensagemContato {
+  id       String   @id @default(cuid())
+  nome     String
+  email    String
+  assunto  String
+  mensagem String   @db.Text
+  lida     Boolean  @default(false)
+  criadoEm DateTime @default(now())
+
+  @@map("mensagens_contato")
+}
+
+model InscritoNewsletter {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  consentidoEm DateTime @default(now())
+
+  @@map("inscritos_newsletter")
+}
