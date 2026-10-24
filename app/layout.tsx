@@ -39,18 +39,21 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         </a>
         <CatalogoProvider produtos={catalogo}>
           <BarraAvisos />
-          <Header
-            conta={
-              <Suspense fallback={<ContaLinkEsqueleto />}>
-                <ContaLink />
-              </Suspense>
-            }
-            contaMobile={
-              <Suspense fallback={<ContaLinkMobileEsqueleto />}>
-                <ContaLinkMobile />
-              </Suspense>
-            }
-          />
+          {/* O cabeçalho lê o caminho (usePathname): em rotas dinâmicas sem generateStaticParams, como o pedido, isso exige Suspense. */}
+          <Suspense fallback={<div className="h-[7.5rem] bg-white md:h-[10.5rem]" aria-hidden />}>
+            <Header
+              conta={
+                <Suspense fallback={<ContaLinkEsqueleto />}>
+                  <ContaLink />
+                </Suspense>
+              }
+              contaMobile={
+                <Suspense fallback={<ContaLinkMobileEsqueleto />}>
+                  <ContaLinkMobile />
+                </Suspense>
+              }
+            />
+          </Suspense>
           <main id="conteudo" className="flex-1">
             {children}
           </main>

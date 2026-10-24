@@ -2,17 +2,14 @@
 
 import Link from "next/link";
 import { ShoppingBag } from "lucide-react";
-import { useCarrinho, useStore } from "@/lib/store";
-import { cn } from "@/lib/utils";
+import { useCarrinho } from "@/lib/store";
 import { classesBotao, LinkBotao } from "@/components/ui/Button";
 import { LinhaCarrinho } from "./LinhaCarrinho";
-import { CupomForm, ProgressoFrete, ReceitaUpload, ResumoValores } from "./Complementos";
+import { AvisoReceita, CupomForm, ProgressoFrete, ResumoValores } from "./Complementos";
 
 export function CarrinhoPagina() {
   const resumo = useCarrinho();
-  const receita = useStore((s) => s.receita);
   const vazio = resumo.linhas.length === 0;
-  const bloqueado = resumo.precisaReceita && !receita;
 
   return (
     <div className="wrap pt-8 pb-4 md:pt-12">
@@ -44,17 +41,11 @@ export function CarrinhoPagina() {
           <aside className="h-fit space-y-5 rounded-panel bg-cream p-6 lg:sticky lg:top-44" aria-label="Resumo do pedido">
             <h2 className="font-display text-2xl font-bold">Resumo do pedido</h2>
             <CupomForm />
-            {resumo.precisaReceita && <ReceitaUpload />}
+            {resumo.precisaReceita && <AvisoReceita />}
             <ResumoValores resumo={resumo} />
-            <Link
-              href="/checkout"
-              prefetch={false}
-              aria-disabled={bloqueado}
-              className={cn(classesBotao("primario", "l", "w-full"), bloqueado && "pointer-events-none opacity-50")}
-            >
+            <Link href="/checkout" prefetch={false} className={classesBotao("primario", "l", "w-full")}>
               Finalizar compra
             </Link>
-            {bloqueado && <p className="text-center text-sm text-coral">Anexe a receita para continuar.</p>}
           </aside>
         </div>
       )}

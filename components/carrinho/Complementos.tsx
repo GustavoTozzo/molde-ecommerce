@@ -1,14 +1,13 @@
 "use client";
 
 import { useId, useState, useTransition } from "react";
-import { FileText, Tag, Truck, Upload, X } from "lucide-react";
-import { aplicarCupom, definirReceita, useStore } from "@/lib/store";
+import { FileText, Tag, Truck, X } from "lucide-react";
+import { aplicarCupom, useStore } from "@/lib/store";
 import type { ResumoCarrinho } from "@/lib/carrinho";
 import { formatBRL, parcelamento } from "@/lib/format";
 import { site } from "@/lib/site";
 import { validarCupomAction } from "@/server/acoes/cupom";
 import { Botao } from "@/components/ui/Button";
-import { cn } from "@/lib/utils";
 
 export function ProgressoFrete({ resumo }: { resumo: ResumoCarrinho }) {
   const alvo = site.loja.freteGratisAcima;
@@ -90,42 +89,15 @@ export function CupomForm() {
   );
 }
 
-export function ReceitaUpload() {
-  const id = useId();
-  const receita = useStore((s) => s.receita);
+/** Itens sob receita: o arquivo é anexado no checkout (o envio é real e vai para a conferência do farmacêutico). */
+export function AvisoReceita() {
   return (
-    <div className={cn("rounded-2xl border-2 border-dashed p-4", receita ? "border-forest bg-mint/60" : "border-amber bg-amber-soft/60")}>
+    <div className="rounded-2xl border-2 border-dashed border-amber bg-amber-soft/60 p-4">
       <p className="flex items-start gap-2 text-sm font-semibold text-ink">
         <FileText className="mt-0.5 size-4 shrink-0" aria-hidden />
         Há itens com venda condicionada à receita
       </p>
-      <p className="mt-1 text-sm text-muted">Anexe uma foto ou PDF legível. O farmacêutico responsável confere antes de preparar a fórmula.</p>
-      {receita ? (
-        <div className="mt-3 flex items-center justify-between gap-2 rounded-full bg-white px-4 py-2 text-sm">
-          <span className="truncate font-semibold">{receita}</span>
-          <button type="button" onClick={() => definirReceita(null)} className="rounded-full p-1 text-muted hover:text-coral" aria-label="Remover receita">
-            <X className="size-4" aria-hidden />
-          </button>
-        </div>
-      ) : (
-        <>
-          <label htmlFor={id} className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-full bg-forest px-5 py-2.5 text-sm font-bold text-white transition hover:bg-forest-dark focus-within:outline-3 focus-within:outline-amber">
-            <Upload className="size-4" aria-hidden />
-            Anexar receita
-          </label>
-          <input
-            id={id}
-            type="file"
-            accept=".pdf,.png,.jpg,.jpeg"
-            className="sr-only"
-            onChange={(e) => {
-              const arquivo = e.target.files?.[0];
-              if (arquivo) definirReceita(arquivo.name);
-            }}
-          />
-        </>
-      )}
-      <p className="mt-2 text-xs text-muted">Demonstração: guardamos só o nome do arquivo no navegador. Em produção, envie a imagem para um armazenamento seguro.</p>
+      <p className="mt-1 text-sm text-muted">Você anexa a receita (foto ou PDF) na etapa de finalizar a compra. O farmacêutico responsável confere antes de preparar a fórmula.</p>
     </div>
   );
 }

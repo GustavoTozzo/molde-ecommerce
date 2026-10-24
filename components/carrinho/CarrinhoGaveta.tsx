@@ -11,11 +11,10 @@ import { fundoClasse } from "@/data/taxonomia";
 import { formatBRL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { LinhaCarrinho } from "./LinhaCarrinho";
-import { CupomForm, ProgressoFrete, ReceitaUpload, ResumoValores } from "./Complementos";
+import { AvisoReceita, CupomForm, ProgressoFrete, ResumoValores } from "./Complementos";
 
 export function CarrinhoGaveta() {
   const aberto = useStore((s) => s.carrinhoAberto);
-  const receita = useStore((s) => s.receita);
   const resumo = useCarrinho();
   const { produtos } = useCatalogo();
   const vazio = resumo.linhas.length === 0;
@@ -75,7 +74,7 @@ export function CarrinhoGaveta() {
               ))}
             </ul>
             <div className="space-y-4 pb-5">
-              {resumo.precisaReceita && <ReceitaUpload />}
+              {resumo.precisaReceita && <AvisoReceita />}
               <CupomForm />
             </div>
           </div>
@@ -88,12 +87,10 @@ export function CarrinhoGaveta() {
                 onClick={fecharCarrinho}
                 variante="primario"
                 tamanho="l"
-                className={cn("w-full", resumo.precisaReceita && !receita && "pointer-events-none opacity-50")}
-                aria-disabled={resumo.precisaReceita && !receita}
+                className="w-full"
               >
                 Finalizar compra
               </LinkBotao>
-              {resumo.precisaReceita && !receita && <p className="text-center text-xs text-coral">Anexe a receita para continuar.</p>}
               <LinkBotao href="/carrinho" onClick={fecharCarrinho} variante="fantasma" tamanho="m" className="w-full">
                 Ver carrinho completo
               </LinkBotao>

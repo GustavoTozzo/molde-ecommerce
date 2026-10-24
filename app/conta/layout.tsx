@@ -18,7 +18,10 @@ export default function LayoutConta({ children }: { children: ReactNode }) {
       <CabecalhoPagina titulo="Minha conta" sobretitulo="Área do cliente" trilha={[{ rotulo: "Minha conta" }]} />
       <div className="wrap mt-6 grid gap-8 lg:grid-cols-[16rem_1fr] lg:gap-12">
         <aside>
-          <ContaNav />
+          {/* usePathname() em rota dinâmica ([id]) exige Suspense. */}
+          <Suspense fallback={<div className="h-12 animate-pulse rounded-full bg-cream lg:h-56 lg:rounded-2xl" aria-hidden />}>
+            <ContaNav />
+          </Suspense>
         </aside>
         <div className="min-w-0">
           <Suspense fallback={<div className="h-64 animate-pulse rounded-panel bg-cream" aria-busy="true" aria-label="Carregando" />}>{children}</Suspense>

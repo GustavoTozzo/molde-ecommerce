@@ -32,6 +32,11 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
+  experimental: {
+    // O checkout envia a receita (até 3 MB) junto do formulário; o padrão do Next é 1 MB.
+    // A Vercel limita o corpo de uma função a 4,5 MB, então 4 MB é o teto prático.
+    serverActions: { bodySizeLimit: "4mb" },
+  },
   turbopack: {
     rules: {
       "*.css": {

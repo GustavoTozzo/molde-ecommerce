@@ -35,6 +35,7 @@ enum StatusPagamento {
   PENDENTE
   CONFIRMADO
   FALHOU
+  ESTORNADO
 }
 
 enum StatusReceita {
@@ -296,32 +297,38 @@ model Receita {
 }
 
 model Pedido {
-  id              String          @id @default(cuid())
-  numero          Int             @unique @default(autoincrement())
-  usuarioId       String
-  usuario         Usuario         @relation(fields: [usuarioId], references: [id])
-  status          StatusPedido    @default(AGUARDANDO_PAGAMENTO)
-  subtotal        Int
-  descontoCupom   Int             @default(0)
-  frete           Int             @default(0)
-  total           Int
-  cupomCodigo     String?
+  id                String          @id @default(cuid())
+  numero            Int             @unique @default(autoincrement())
+  usuarioId         String
+  usuario           Usuario         @relation(fields: [usuarioId], references: [id])
+  /// Chave gerada pelo navegador a cada tentativa de compra: reenviar o mesmo formulário
+  /// (duplo clique, rede instável) devolve o pedido já criado em vez de criar outro.
+  chaveIdempotencia String?
+  status            StatusPedido    @default(AGUARDANDO_PAGAMENTO)
+  subtotal          Int
+  descontoCupom     Int             @default(0)
+  frete             Int             @default(0)
+  total             Int
+  cupomCodigo       String?
   /// Snapshot do endereço no momento da compra (não muda se o cliente editar o cadastro).
-  enderecoEntrega Json
-  formaPagamento  FormaPagamento
-  statusPagamento StatusPagamento @default(PENDENTE)
+  enderecoEntrega   Json
+  formaPagamento    FormaPagamento
+  statusPagamento   StatusPagamento @default(PENDENTE)
   /// Código fictício do pagamento (Pix copia-e-cola, linha digitável do boleto ou autorização do cartão).
-  codigoPagamento String?
-  cartaoFinal4    String?
-  receitaId       String?
-  receita         Receita?        @relation(fields: [receitaId], references: [id])
-  codigoRastreio  String?
-  criadoEm        DateTime        @default(now())
-  atualizadoEm    DateTime        @updatedAt
+  codigoPagamento   String?
+  /// Parcelas escolhidas no cartão (1 = à vista). Sem juros; o limite vem de lib/site.ts.
+  parcelas          Int             @default(1)
+  cartaoFinal4      String?
+  receitaId         String?
+  receita           Receita?        @relation(fields: [receitaId], references: [id])
+  codigoRastreio    String?
+  criadoEm          DateTime        @default(now())
+  atualizadoEm      DateTime        @updatedAt
 
   itens       ItemPedido[]
   assinaturas Assinatura[]
 
+  @@unique([usuarioId, chaveIdempotencia])
   @@index([usuarioId, criadoEm])
   @@index([status])
   @@map("pedidos")

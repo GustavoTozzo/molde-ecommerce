@@ -11,7 +11,7 @@ Estudo que originou o layout: [`docs/estudo-de-referencia.md`](docs/estudo-de-re
 - [x] **Fase 1** — Front-end do molde com dados estáticos (estudo de referência, design system, 57 páginas)
 - [x] **Fase 2** — Banco de dados e camada de leitura (Prisma + Postgres, seed, repositório com `use cache`) — decisões em [`docs/decisoes-fase-2.md`](docs/decisoes-fase-2.md)
 - [x] **Fase 3** — Contas e autenticação (Auth.js, cadastro, login, área do cliente, favoritos persistidos) — decisões em [`docs/decisoes-fase-3.md`](docs/decisoes-fase-3.md)
-- [ ] **Fase 4** — Checkout real (pedido em transação, estoque, cupons no servidor, pagamento simulado, upload de receita)
+- [x] **Fase 4** — Checkout real (pedido em transação, estoque, cupons no servidor, pagamento simulado, upload de receita) — decisões em [`docs/decisoes-fase-4.md`](docs/decisoes-fase-4.md)
 - [ ] **Fase 5** — Painel administrativo (produtos, pedidos, fila de receitas, cupons, mensagens)
 - [ ] **Fase 6** — Formulários persistidos, testes automatizados e CI
 - [ ] **Fase 7** — Publicação (GitHub, Neon, Vercel)
@@ -37,6 +37,7 @@ npm run db:seed                # catálogo, conteúdo, cupons e 3 usuários de d
 npm run dev                    # http://localhost:3000
 npm run build && npm run start
 npm run typecheck && npm run lint
+npm run test                   # integração do pedido (precisa do banco local)
 ```
 
 Comandos úteis: `npm run db:migrate` (cria migração a partir de mudanças no `schema.prisma`), `npm run db:studio` (navegador de dados), `npm run db:seed` (idempotente: pode rodar de novo sem duplicar nada).
@@ -54,11 +55,13 @@ Criados por `npm run db:seed` com os valores de `.env` (padrões em `.env.exampl
 - **Home:** hero em carrossel, categorias, prateleiras, banners, vídeos de criadores, depoimentos, especialista em destaque, blog, história e FAQ.
 - **Catálogo (`/produtos`):** filtros por forma, objetivo, preço, receita e oferta; ordenação; busca tolerante a acentos (nome, forma, objetivo e ingrediente); filtros na URL.
 - **Produto (`/produtos/[slug]`):** galeria, tamanho e sabor, compra única ou assinatura, simulação de frete, aviso de venda com receita, tabela nutricional, avaliações, relacionados e JSON-LD.
-- **Carrinho:** gaveta e página `/carrinho`; **cupom validado no servidor** (tabela `cupons`); barra de frete grátis; anexo de receita (ainda simulado até a Fase 4).
+- **Carrinho:** gaveta e página `/carrinho`; **cupom validado no servidor** (tabela `cupons`); barra de frete grátis; aviso quando há item sob receita.
+- **Checkout (`/checkout`, exige login):** endereço salvo ou novo, Pix / cartão (até 6x) / boleto **simulados**, upload real da receita (conferida pelos primeiros bytes do arquivo), pedido gravado em transação com baixa de estoque atômica, cupom e totais recalculados no servidor e chave de idempotência contra cobrança dupla. O número do cartão **não sai do navegador**: o servidor recebe só os 4 últimos dígitos.
+- **Pedidos (`/conta/pedidos/[id]`):** linha do tempo, QR Code e código do Pix fictícios, receita, itens, totais, entrega e cancelamento (devolve estoque e estorna).
 - **Conta (`/conta`):** cadastro e login reais (Auth.js v5, senha com bcrypt), resumo, endereços (até 5, com principal), dados pessoais, troca de senha, "meus pedidos" e **favoritos salvos na conta** (mesclados com os do navegador no primeiro login). `/conta`, `/admin` e `/checkout` ficam atrás do `proxy.ts`, e cada página e ação confere a sessão de novo no banco.
 - **Acessibilidade e segurança:** link "pular para o conteúdo", foco visível, `aria-*`, cabeçalhos HTTP (CSP, HSTS, `nosniff`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`).
 
-Verificação: build de produção lendo do Postgres, `tsc` e `eslint` sem erros, 55 verificações de interação do site público e 37 de conta/autenticação em Chrome headless.
+Verificação: build de produção lendo do Postgres, `tsc` e `eslint` sem erros, **19 testes de integração** (`npm run test`, inclui compras simultâneas disputando o último estoque) e, em Chrome headless, 55 verificações do site público, 37 de conta/autenticação e 35 de checkout.
 
 ## Estrutura
 
@@ -91,9 +94,10 @@ docs/                 estudo da referência, modelagem de dados, decisões por f
 | Conta, login e endereços | Banco + Auth.js, sessão JWT de 7 dias | 3 (pronto) |
 | Favoritos | Banco (logado) ou localStorage (visitante) | 3 (pronto) |
 | Recuperação de senha e verificação de e-mail | Não existe (precisa de serviço de envio) | 7 |
-| Pedidos, estoque, totais | `/checkout` exige login, mas a confirmação ainda é simulada no navegador | 4 |
-| Pagamento | Simulado (Pix, boleto e cartão fictícios) | 4 |
-| Receita | Guarda só o nome do arquivo | 4 (upload) e 5 (conferência) |
+| Pedidos, estoque, totais, cupom | Banco, transação, recálculo no servidor | 4 (pronto) |
+| Pagamento | **Simulado** (Pix, boleto e cartão fictícios; botão "Simular pagamento") | trocar por gateway ao operar |
+| Receita | Upload real, guardada no banco (demonstração) | 4 (upload) e 5 (conferência pelo farmacêutico) |
+| Assinaturas | Registro criado no pedido; sem geração de pedidos recorrentes | 8 (Shopify) |
 | Frete | Simulação por região do CEP | pós-Shopify / transportadora |
 | Avaliações | Exemplos marcados como fictícios | 6 |
 

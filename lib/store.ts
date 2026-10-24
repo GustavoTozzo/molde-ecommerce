@@ -14,7 +14,6 @@ import { alternarFavoritoNoServidor } from "@/server/acoes/conta";
 interface State {
   itens: ItemCarrinho[];
   cupom: CupomAplicado | null;
-  receita: string | null;
   favoritos: string[];
   /** Os favoritos vieram da conta (e não só deste navegador): ao sair, devem sumir daqui. */
   favoritosDeConta: boolean;
@@ -25,7 +24,7 @@ interface State {
 }
 
 const CHAVE = "casa-magistral:estado:v2";
-const inicial: State = { itens: [], cupom: null, receita: null, favoritos: [], favoritosDeConta: false, logado: false, carrinhoAberto: false, aviso: null };
+const inicial: State = { itens: [], cupom: null, favoritos: [], favoritosDeConta: false, logado: false, carrinhoAberto: false, aviso: null };
 
 let state: State = inicial;
 let carregado = false;
@@ -38,8 +37,8 @@ function emitir() {
 
 function persistir() {
   try {
-    const { itens, cupom, receita, favoritos, favoritosDeConta } = state;
-    localStorage.setItem(CHAVE, JSON.stringify({ itens, cupom, receita, favoritos, favoritosDeConta }));
+    const { itens, cupom, favoritos, favoritosDeConta } = state;
+    localStorage.setItem(CHAVE, JSON.stringify({ itens, cupom, favoritos, favoritosDeConta }));
   } catch {
     /* armazenamento indisponível: segue sem persistir */
   }
@@ -56,7 +55,6 @@ function carregar() {
       ...state,
       itens: Array.isArray(lido.itens) ? lido.itens : [],
       cupom: lido.cupom ?? null,
-      receita: lido.receita ?? null,
       favoritos: Array.isArray(lido.favoritos) ? lido.favoritos : [],
       favoritosDeConta: lido.favoritosDeConta === true,
     };
@@ -145,12 +143,8 @@ export function aplicarCupom(cupom: CupomAplicado | null) {
   definir({ cupom });
 }
 
-export function definirReceita(nomeArquivo: string | null) {
-  definir({ receita: nomeArquivo });
-}
-
 export function limparCarrinho() {
-  definir({ itens: [], cupom: null, receita: null });
+  definir({ itens: [], cupom: null });
 }
 
 export function abrirCarrinho() {
