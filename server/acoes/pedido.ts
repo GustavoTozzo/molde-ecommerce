@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { excedeuLimite } from "@/server/limite";
-import { cancelarPedido, confirmarPagamentoSimulado, criarPedido, type ArquivoReceita, type EnderecoEntrega } from "@/server/pedidos";
+import { cancelarPedido, confirmarPagamentoSimulado, criarPedido, reenviarReceita, type ArquivoReceita, type EnderecoEntrega } from "@/server/pedidos";
 import { prisma } from "@/server/prisma";
 import { exigirUsuarioNaAcao } from "@/server/sessao";
 import { CAMPOS_ENDERECO, enderecoSchema, errosPorCampo, texto, valoresDe, type EstadoForm } from "@/server/validacao";
@@ -159,4 +159,18 @@ export async function cancelarMeuPedido(pedidoId: string): Promise<void> {
   await cancelarPedido(idSchema.parse(pedidoId), usuario.id);
   revalidatePath(`/conta/pedidos/${pedidoId}`);
   revalidatePath("/conta/pedidos");
+}
+
+/** Cliente envia outra receita depois de uma recusa. */
+export async function reenviarMinhaReceita(pedidoId: string, _anterior: EstadoForm, dados: FormData): Promise<EstadoForm> {
+  const usuario = await exigirUsuarioNaAcao();
+  if (excedeuLimite(`receita:${usuario.id}`, 10, 60 * 60_000)) return { erro: "Muitos envios em pouco tempo. Aguarde alguns minutos." };
+  const lida = await lerReceita(dados);
+  if ("erro" in lida) return { erro: lida.erro };
+  if (!lida.receita) return { erro: "Escolha o arquivo da receita." };
+  const ok = await reenviarReceita(idSchema.parse(pedidoId), usuario.id, lida.receita);
+  if (!ok) return { erro: "Este pedido não está esperando uma nova receita." };
+  revalidatePath(`/conta/pedidos/${pedidoId}`);
+  revalidatePath("/admin", "layout");
+  return { ok: "Receita enviada. O farmacêutico vai conferir em breve." };
 }

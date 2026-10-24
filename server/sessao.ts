@@ -1,5 +1,6 @@
 import "server-only";
 import type { Papel } from "@prisma/client";
+import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { auth } from "@/auth";
@@ -18,6 +19,9 @@ export interface UsuarioAtual {
  */
 // `cache` deduplica dentro da mesma requisição: cabeçalho, página e ações chamam e só o primeiro consulta o banco.
 export const usuarioAtual = cache(async (): Promise<UsuarioAtual | null> => {
+  // Declara que a leitura da sessão é por requisição. O Auth.js gera um token CSRF aleatório
+  // (crypto.getRandomValues) a cada leitura, e o Next recusa valor aleatório durante a pré-renderização.
+  await connection();
   const sessao = await auth();
   const id = sessao?.user?.id;
   if (!id) return null;
@@ -42,4 +46,23 @@ export async function exigirUsuarioNaAcao(): Promise<UsuarioAtual> {
 
 export function temPapel(u: UsuarioAtual, ...papeis: Papel[]): boolean {
   return papeis.includes(u.papel);
+}
+
+const EQUIPE: Papel[] = ["ADMINISTRADOR", "FARMACEUTICO"];
+
+/**
+ * Páginas do painel: sem sessão vai para o login; com sessão de papel insuficiente volta para
+ * a conta. `papeis` restringe ainda mais (ex.: só ADMINISTRADOR em produtos e usuários).
+ */
+export async function exigirEquipe(destino: string, papeis: Papel[] = EQUIPE): Promise<UsuarioAtual> {
+  const u = await exigirUsuario(destino);
+  if (!papeis.includes(u.papel)) redirect("/conta");
+  return u;
+}
+
+/** Server Actions do painel: papel conferido no banco a cada chamada; lança se não puder. */
+export async function exigirEquipeNaAcao(papeis: Papel[] = EQUIPE): Promise<UsuarioAtual> {
+  const u = await exigirUsuarioNaAcao();
+  if (!papeis.includes(u.papel)) throw new Error("Sem permissão para esta ação.");
+  return u;
 }

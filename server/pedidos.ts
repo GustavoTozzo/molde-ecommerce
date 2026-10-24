@@ -54,6 +54,13 @@ export interface EntradaPedido {
 
 export type ResultadoCriacao = { ok: true; pedidoId: string } | { ok: false; erro: string };
 
+type Tx = Prisma.TransactionClient;
+
+/** Trilha de auditoria: registra quem fez o quê no pedido (`autorId` nulo = o sistema). */
+async function registrarEvento(tx: Tx, pedidoId: string, descricao: string, autorId?: string | null) {
+  await tx.eventoPedido.create({ data: { pedidoId, descricao, autorId: autorId ?? null } });
+}
+
 function somarMeses(base: Date, meses: number): Date {
   const d = new Date(base);
   d.setMonth(d.getMonth() + meses);
@@ -197,6 +204,13 @@ export async function criarPedido(entrada: EntradaPedido): Promise<ResultadoCria
           },
           select: { id: true },
         });
+        await registrarEvento(tx, pedido.id, "Pedido criado.", entrada.usuarioId);
+        await registrarEvento(
+          tx,
+          pedido.id,
+          confirmado ? `Pagamento aprovado (cartão final ${entrada.cartaoFinal4}).` : `Aguardando pagamento via ${entrada.formaPagamento === "PIX" ? "Pix" : "boleto"}.`,
+        );
+        if (receita) await registrarEvento(tx, pedido.id, "Receita anexada, aguardando conferência.", entrada.usuarioId);
         return pedido.id;
       },
       { timeout: 20_000 },
@@ -218,11 +232,15 @@ export function statusAposPagamento(temReceita: boolean, receitaAprovada: boolea
   return temReceita && !receitaAprovada ? "AGUARDANDO_RECEITA" : "EM_PREPARO";
 }
 
-/** Demonstração: o cliente "paga" o Pix/boleto fictício. Com gateway real isto vira um webhook. */
-export async function confirmarPagamentoSimulado(pedidoId: string, usuarioId: string): Promise<boolean> {
+/**
+ * Confirma o pagamento de um Pix/boleto. Na demonstração quem aciona é o cliente (botão
+ * "Simular pagamento") ou a equipe; com gateway real isto vira um webhook. `usuarioId` restringe
+ * ao dono (cliente); `null` = equipe, e `autorId` entra na trilha de auditoria.
+ */
+export async function confirmarPagamentoSimulado(pedidoId: string, usuarioId: string | null, autorId?: string | null): Promise<boolean> {
   return prisma.$transaction(async (tx) => {
     const p = await tx.pedido.findFirst({
-      where: { id: pedidoId, usuarioId, status: "AGUARDANDO_PAGAMENTO", statusPagamento: "PENDENTE" },
+      where: { id: pedidoId, ...(usuarioId && { usuarioId }), status: "AGUARDANDO_PAGAMENTO", statusPagamento: "PENDENTE" },
       select: { id: true, receita: { select: { status: true } } },
     });
     if (!p) return false;
@@ -231,17 +249,26 @@ export async function confirmarPagamentoSimulado(pedidoId: string, usuarioId: st
       where: { id: p.id, status: "AGUARDANDO_PAGAMENTO", statusPagamento: "PENDENTE" },
       data: { status: proximo, statusPagamento: "CONFIRMADO" },
     });
-    return r.count === 1;
+    if (r.count !== 1) return false;
+    await registrarEvento(tx, p.id, "Pagamento confirmado.", autorId ?? usuarioId);
+    return true;
   });
 }
 
 const CANCELAVEIS_PELO_CLIENTE: StatusPedido[] = ["AGUARDANDO_PAGAMENTO", "AGUARDANDO_RECEITA"];
+/** A equipe ainda pode cancelar o que está em preparo; depois de enviado, só devolução. */
+export const CANCELAVEIS_PELA_EQUIPE: StatusPedido[] = ["AGUARDANDO_PAGAMENTO", "AGUARDANDO_RECEITA", "EM_PREPARO"];
 
 /**
  * Cancela, devolve o estoque, estorna o pagamento já confirmado e encerra assinaturas
  * criadas pelo pedido. `usuarioId` = dono (cliente); `null` = equipe (sem restrição de dono).
  */
-export async function cancelarPedido(pedidoId: string, usuarioId: string | null, statusPermitidos: StatusPedido[] = CANCELAVEIS_PELO_CLIENTE): Promise<boolean> {
+export async function cancelarPedido(
+  pedidoId: string,
+  usuarioId: string | null,
+  statusPermitidos: StatusPedido[] = CANCELAVEIS_PELO_CLIENTE,
+  autorId?: string | null,
+): Promise<boolean> {
   return prisma.$transaction(async (tx) => {
     const p = await tx.pedido.findFirst({
       where: { id: pedidoId, ...(usuarioId && { usuarioId }), status: { in: statusPermitidos } },
@@ -262,6 +289,72 @@ export async function cancelarPedido(pedidoId: string, usuarioId: string | null,
       await tx.cupom.updateMany({ where: { codigo: p.cupomCodigo, usos: { gt: 0 } }, data: { usos: { decrement: 1 } } });
     }
     await tx.assinatura.updateMany({ where: { pedidoOrigemId: p.id }, data: { status: "CANCELADA" } });
+    await registrarEvento(tx, p.id, estorno === "ESTORNADO" ? "Pedido cancelado e pagamento estornado." : "Pedido cancelado.", autorId ?? usuarioId);
+    return true;
+  });
+}
+
+/** Equipe: pedido em preparo sai para entrega com código de rastreio. */
+export async function marcarEnviado(pedidoId: string, codigoRastreio: string, autorId: string): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    const r = await tx.pedido.updateMany({ where: { id: pedidoId, status: "EM_PREPARO" }, data: { status: "ENVIADO", codigoRastreio } });
+    if (r.count !== 1) return false;
+    await registrarEvento(tx, pedidoId, `Pedido enviado. Rastreio: ${codigoRastreio}.`, autorId);
+    return true;
+  });
+}
+
+export async function marcarEntregue(pedidoId: string, autorId: string): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    const r = await tx.pedido.updateMany({ where: { id: pedidoId, status: "ENVIADO" }, data: { status: "ENTREGUE" } });
+    if (r.count !== 1) return false;
+    await registrarEvento(tx, pedidoId, "Pedido entregue.", autorId);
+    return true;
+  });
+}
+
+export type DecisaoReceita = "APROVADA" | "REJEITADA";
+
+/**
+ * Farmacêutico confere a receita. Aprovada: os pedidos que esperavam por ela e já estão pagos
+ * entram em preparo. Recusada: o pedido continua aguardando e o cliente pode reenviar outro arquivo.
+ */
+export async function revisarReceita(receitaId: string, decisao: DecisaoReceita, observacao: string | null, revisorId: string): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    const r = await tx.receita.updateMany({
+      where: { id: receitaId, status: "PENDENTE" },
+      data: { status: decisao, observacao, revisadaPorId: revisorId, revisadaEm: new Date() },
+    });
+    if (r.count !== 1) return false; // já revisada por outra pessoa
+    const pedidos = await tx.pedido.findMany({ where: { receitaId }, select: { id: true } });
+    for (const p of pedidos) {
+      await registrarEvento(tx, p.id, decisao === "APROVADA" ? "Receita aprovada pelo farmacêutico." : `Receita não aprovada${observacao ? `: ${observacao}` : "."}`, revisorId);
+    }
+    if (decisao === "APROVADA") {
+      const liberados = await tx.pedido.findMany({ where: { receitaId, status: "AGUARDANDO_RECEITA", statusPagamento: "CONFIRMADO" }, select: { id: true } });
+      for (const p of liberados) {
+        const mudou = await tx.pedido.updateMany({ where: { id: p.id, status: "AGUARDANDO_RECEITA" }, data: { status: "EM_PREPARO" } });
+        if (mudou.count === 1) await registrarEvento(tx, p.id, "Pedido liberado para preparo.", revisorId);
+      }
+    }
+    return true;
+  });
+}
+
+/** Cliente envia outro arquivo depois de uma receita recusada. */
+export async function reenviarReceita(pedidoId: string, usuarioId: string, arquivo: ArquivoReceita): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    const p = await tx.pedido.findFirst({
+      where: { id: pedidoId, usuarioId, status: { in: CANCELAVEIS_PELO_CLIENTE }, receita: { is: { status: "REJEITADA" } } },
+      select: { id: true },
+    });
+    if (!p) return false;
+    const nova = await tx.receita.create({
+      data: { usuarioId, nomeArquivo: arquivo.nomeArquivo, tipoMime: arquivo.tipoMime, tamanhoBytes: arquivo.conteudo.byteLength, conteudo: arquivo.conteudo },
+      select: { id: true },
+    });
+    await tx.pedido.update({ where: { id: p.id }, data: { receitaId: nova.id } });
+    await registrarEvento(tx, p.id, "Nova receita enviada, aguardando conferência.", usuarioId);
     return true;
   });
 }

@@ -4,8 +4,9 @@ import { notFound } from "next/navigation";
 import QRCode from "qrcode";
 import { CheckCircle2, Circle, CircleDot, FileText, XCircle } from "lucide-react";
 import { BotaoCopiar, FormConfirmar, LimparCarrinhoAoConfirmar } from "@/components/conta/PedidoAcoes";
+import { ReenviarReceita } from "@/components/conta/ReenviarReceita";
 import { Botao } from "@/components/ui/Button";
-import { formatBRL, formatarData } from "@/lib/format";
+import { formatBRL, formatarData, formatarDataHora } from "@/lib/format";
 import { etapasDoPedido, podeCancelarPeloCliente, rotuloFormaPagamento, rotuloStatusPagamento, rotuloStatusPedido, rotuloStatusReceita } from "@/lib/pedidos";
 import { cn } from "@/lib/utils";
 import { cancelarMeuPedido, simularPagamento } from "@/server/acoes/pedido";
@@ -23,7 +24,11 @@ export default async function PaginaPedido(props: PageProps<"/conta/pedidos/[id]
   // `usuarioId` no where: quem pedir o id de outra pessoa recebe 404, igual a um id que não existe.
   const p = await prisma.pedido.findFirst({
     where: { id, usuarioId: usuario.id },
-    include: { itens: true, receita: { select: { id: true, status: true, observacao: true, nomeArquivo: true } } },
+    include: {
+      itens: true,
+      receita: { select: { id: true, status: true, observacao: true, nomeArquivo: true } },
+      eventos: { orderBy: { criadoEm: "asc" }, select: { id: true, descricao: true, criadoEm: true } },
+    },
   });
   if (!p) notFound();
 
@@ -132,6 +137,7 @@ export default async function PaginaPedido(props: PageProps<"/conta/pedidos/[id]
             <span className="rounded-full bg-mint px-2.5 py-0.5 text-xs font-bold text-forest-dark">{rotuloStatusReceita[p.receita.status]}</span>
           </p>
           {p.receita.observacao && <p className="mt-2 text-sm text-muted">Observação do farmacêutico: {p.receita.observacao}</p>}
+          {p.receita.status === "REJEITADA" && podeCancelarPeloCliente(p.status) && <ReenviarReceita pedidoId={p.id} />}
         </section>
       )}
 
@@ -188,6 +194,22 @@ export default async function PaginaPedido(props: PageProps<"/conta/pedidos/[id]
           {endereco.bairro} · {endereco.cidade}/{endereco.uf} · CEP {endereco.cep}
         </p>
         {p.codigoRastreio && <p className="mt-2 text-sm">Código de rastreio: <strong>{p.codigoRastreio}</strong></p>}
+      </section>
+
+      <section aria-labelledby="hist-titulo">
+        <h3 id="hist-titulo" className="mb-3 font-display text-xl font-bold">
+          Histórico
+        </h3>
+        <ol className="grid gap-2 text-sm">
+          {p.eventos.map((e) => (
+            <li key={e.id} className="flex flex-wrap gap-x-3 rounded-2xl bg-cream px-4 py-2.5">
+              <time className="font-mono text-xs text-muted" dateTime={e.criadoEm.toISOString()}>
+                {formatarDataHora(e.criadoEm)}
+              </time>
+              <span>{e.descricao}</span>
+            </li>
+          ))}
+        </ol>
       </section>
 
       {podeCancelarPeloCliente(p.status) && (

@@ -3,7 +3,17 @@ import assert from "node:assert/strict";
 import { after, before, describe, test } from "node:test";
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
-import { cancelarPedido, confirmarPagamentoSimulado, criarPedido, type EntradaPedido } from "../server/pedidos";
+import {
+  CANCELAVEIS_PELA_EQUIPE,
+  cancelarPedido,
+  confirmarPagamentoSimulado,
+  criarPedido,
+  marcarEntregue,
+  marcarEnviado,
+  reenviarReceita,
+  revisarReceita,
+  type EntradaPedido,
+} from "../server/pedidos";
 import { prisma } from "../server/prisma";
 
 /**
@@ -273,5 +283,98 @@ describe("cancelamento", () => {
     const pix = await criarPedido(entrada({ formaPagamento: "PIX", cartaoFinal4: undefined }));
     assert.ok(pix.ok);
     assert.equal(await cancelarPedido(pix.pedidoId, "id-de-outra-pessoa"), false);
+  });
+});
+
+const PDF = () => ({ nomeArquivo: "r.pdf", tipoMime: "application/pdf", conteudo: new Uint8Array(Buffer.from("%PDF-1.4 x")) });
+
+async function itemComReceita() {
+  const t = await prisma.tamanho.findFirstOrThrow({ where: { produto: { slug: COM_RECEITA.slug } }, orderBy: { ordem: "asc" } });
+  return [{ slug: COM_RECEITA.slug, tamanhoId: t.codigo, qtd: 1, frequencia: "unica" as const }];
+}
+
+describe("operação da equipe", () => {
+  test("envio e entrega seguem a ordem e deixam trilha de auditoria", async () => {
+    await definirEstoque(10);
+    const aguardando = await criarPedido(entrada({ formaPagamento: "PIX", cartaoFinal4: undefined }));
+    const preparo = await criarPedido(entrada());
+    assert.ok(aguardando.ok && preparo.ok);
+    assert.equal(await marcarEnviado(aguardando.pedidoId, "BR123456789", usuarioId), false, "não envia pedido que ainda não foi pago");
+    assert.equal(await marcarEntregue(preparo.pedidoId, usuarioId), false, "não entrega o que não foi enviado");
+    assert.equal(await marcarEnviado(preparo.pedidoId, "BR123456789", usuarioId), true);
+    assert.equal(await marcarEnviado(preparo.pedidoId, "OUTRO", usuarioId), false, "não envia duas vezes");
+    assert.equal(await marcarEntregue(preparo.pedidoId, usuarioId), true);
+    const p = await prisma.pedido.findUniqueOrThrow({ where: { id: preparo.pedidoId }, include: { eventos: { orderBy: { criadoEm: "asc" } } } });
+    assert.equal(p.status, "ENTREGUE");
+    assert.equal(p.codigoRastreio, "BR123456789");
+    assert.deepEqual(
+      p.eventos.map((e) => e.descricao).filter((d) => /enviado|entregue/i.test(d)),
+      ["Pedido enviado. Rastreio: BR123456789.", "Pedido entregue."],
+    );
+    assert.equal(p.eventos.find((e) => /enviado/i.test(e.descricao))?.autorId, usuarioId);
+  });
+
+  test("receita aprovada libera o pedido já pago; revisar duas vezes não vale", async () => {
+    const r = await criarPedido(entrada({ itens: await itemComReceita(), receita: PDF() }));
+    assert.ok(r.ok);
+    const { receitaId } = await prisma.pedido.findUniqueOrThrow({ where: { id: r.pedidoId }, select: { receitaId: true } });
+    assert.ok(receitaId);
+    assert.equal(await revisarReceita(receitaId, "APROVADA", null, usuarioId), true);
+    assert.equal(await revisarReceita(receitaId, "REJEITADA", "tarde demais", usuarioId), false);
+    const p = await prisma.pedido.findUniqueOrThrow({ where: { id: r.pedidoId }, include: { receita: true } });
+    assert.equal(p.status, "EM_PREPARO");
+    assert.equal(p.receita?.status, "APROVADA");
+    assert.equal(p.receita?.revisadaPorId, usuarioId);
+    assert.ok(p.receita?.revisadaEm);
+  });
+
+  test("receita recusada mantém o pedido parado; reenviar e aprovar o libera", async () => {
+    const r = await criarPedido(entrada({ itens: await itemComReceita(), receita: PDF() }));
+    assert.ok(r.ok);
+    const primeira = (await prisma.pedido.findUniqueOrThrow({ where: { id: r.pedidoId }, select: { receitaId: true } })).receitaId!;
+    assert.equal(await reenviarReceita(r.pedidoId, usuarioId, PDF()), false, "só reenvia depois de recusada");
+    assert.equal(await revisarReceita(primeira, "REJEITADA", "ilegível", usuarioId), true);
+    assert.equal((await prisma.pedido.findUniqueOrThrow({ where: { id: r.pedidoId } })).status, "AGUARDANDO_RECEITA");
+    assert.equal(await reenviarReceita(r.pedidoId, "id-de-outra-pessoa", PDF()), false, "outra pessoa não reenvia");
+    assert.equal(await reenviarReceita(r.pedidoId, usuarioId, PDF()), true);
+    const segunda = (await prisma.pedido.findUniqueOrThrow({ where: { id: r.pedidoId }, select: { receitaId: true } })).receitaId!;
+    assert.notEqual(segunda, primeira);
+    assert.equal((await prisma.receita.findUniqueOrThrow({ where: { id: segunda } })).status, "PENDENTE");
+    assert.equal(await revisarReceita(segunda, "APROVADA", null, usuarioId), true);
+    assert.equal((await prisma.pedido.findUniqueOrThrow({ where: { id: r.pedidoId } })).status, "EM_PREPARO");
+  });
+
+  test("Pix com receita: pagar antes ou depois da aprovação chega ao mesmo lugar", async () => {
+    const pagoPrimeiro = await criarPedido(entrada({ itens: await itemComReceita(), receita: PDF(), formaPagamento: "PIX", cartaoFinal4: undefined }));
+    const aprovadoPrimeiro = await criarPedido(entrada({ itens: await itemComReceita(), receita: PDF(), formaPagamento: "PIX", cartaoFinal4: undefined }));
+    assert.ok(pagoPrimeiro.ok && aprovadoPrimeiro.ok);
+    const rec = async (id: string) => (await prisma.pedido.findUniqueOrThrow({ where: { id }, select: { receitaId: true } })).receitaId!;
+
+    assert.equal(await confirmarPagamentoSimulado(pagoPrimeiro.pedidoId, null, usuarioId), true);
+    assert.equal((await prisma.pedido.findUniqueOrThrow({ where: { id: pagoPrimeiro.pedidoId } })).status, "AGUARDANDO_RECEITA");
+    await revisarReceita(await rec(pagoPrimeiro.pedidoId), "APROVADA", null, usuarioId);
+    assert.equal((await prisma.pedido.findUniqueOrThrow({ where: { id: pagoPrimeiro.pedidoId } })).status, "EM_PREPARO");
+
+    await revisarReceita(await rec(aprovadoPrimeiro.pedidoId), "APROVADA", null, usuarioId);
+    assert.equal((await prisma.pedido.findUniqueOrThrow({ where: { id: aprovadoPrimeiro.pedidoId } })).status, "AGUARDANDO_PAGAMENTO", "aprovar a receita não dispensa o pagamento");
+    assert.equal(await confirmarPagamentoSimulado(aprovadoPrimeiro.pedidoId, null, usuarioId), true);
+    assert.equal((await prisma.pedido.findUniqueOrThrow({ where: { id: aprovadoPrimeiro.pedidoId } })).status, "EM_PREPARO");
+  });
+
+  test("a equipe cancela pedido em preparo (estoque e estorno); o cliente não", async () => {
+    await definirEstoque(10);
+    const r = await criarPedido(entrada());
+    assert.ok(r.ok);
+    assert.equal(await estoque(), 9);
+    assert.equal(await cancelarPedido(r.pedidoId, usuarioId), false);
+    assert.equal(await cancelarPedido(r.pedidoId, null, CANCELAVEIS_PELA_EQUIPE, usuarioId), true);
+    assert.equal(await estoque(), 10);
+    const p = await prisma.pedido.findUniqueOrThrow({ where: { id: r.pedidoId } });
+    assert.equal(p.status, "CANCELADO");
+    assert.equal(p.statusPagamento, "ESTORNADO");
+    const enviado = await criarPedido(entrada());
+    assert.ok(enviado.ok);
+    await marcarEnviado(enviado.pedidoId, "BR987654321", usuarioId);
+    assert.equal(await cancelarPedido(enviado.pedidoId, null, CANCELAVEIS_PELA_EQUIPE, usuarioId), false, "depois de enviado não cancela");
   });
 });

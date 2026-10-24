@@ -77,11 +77,12 @@ model Usuario {
 
   enderecos         Endereco[]
   pedidos           Pedido[]
-  receitas          Receita[]    @relation("ReceitasDoCliente")
-  receitasRevisadas Receita[]    @relation("ReceitasRevisadas")
+  receitas          Receita[]      @relation("ReceitasDoCliente")
+  receitasRevisadas Receita[]      @relation("ReceitasRevisadas")
   favoritos         Favorito[]
   assinaturas       Assinatura[]
   avaliacoes        Avaliacao[]
+  eventosPedido     EventoPedido[]
 
   @@map("usuarios")
 }
@@ -327,6 +328,7 @@ model Pedido {
 
   itens       ItemPedido[]
   assinaturas Assinatura[]
+  eventos     EventoPedido[]
 
   @@unique([usuarioId, chaveIdempotencia])
   @@index([usuarioId, criadoEm])
@@ -393,4 +395,19 @@ model InscritoNewsletter {
   consentidoEm DateTime @default(now())
 
   @@map("inscritos_newsletter")
+}
+
+/// Trilha de auditoria do pedido: quem fez o quê e quando (pagamento, receita, envio, cancelamento).
+model EventoPedido {
+  id        String   @id @default(cuid())
+  pedidoId  String
+  pedido    Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  /// Quem executou a ação; nulo quando foi o sistema ou o cliente anônimo da simulação.
+  autorId   String?
+  autor     Usuario? @relation(fields: [autorId], references: [id], onDelete: SetNull)
+  descricao String
+  criadoEm  DateTime @default(now())
+
+  @@index([pedidoId, criadoEm])
+  @@map("eventos_pedido")
 }

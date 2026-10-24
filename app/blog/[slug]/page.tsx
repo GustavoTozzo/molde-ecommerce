@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
+import { EsqueletoPagina } from "@/components/ui/EsqueletoPagina";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fundoClasse } from "@/data/taxonomia";
@@ -19,7 +21,7 @@ export async function generateMetadata(props: PageProps<"/blog/[slug]">): Promis
 }
 
 /** Modelo de página de artigo. O corpo em MDX entra na próxima etapa (blog). */
-export default async function PaginaPost(props: PageProps<"/blog/[slug]">) {
+async function Conteudo(props: PageProps<"/blog/[slug]">) {
   const { slug } = await props.params;
   const posts = await getPosts();
   const post = posts.find((p) => p.slug === slug);
@@ -59,5 +61,18 @@ export default async function PaginaPost(props: PageProps<"/blog/[slug]">) {
         </div>
       </section>
     </div>
+  );
+}
+
+/**
+ * `params` é lido DENTRO do Suspense: para um endereço que não estava no `generateStaticParams`
+ * (produto novo, por exemplo) o Next serve o esqueleto na hora e completa a página em seguida.
+ * Ler `params` fora do Suspense faz a regeneração falhar em produção.
+ */
+export default function PaginaPost(props: PageProps<"/blog/[slug]">) {
+  return (
+    <Suspense fallback={<EsqueletoPagina />}>
+      <Conteudo {...props} />
+    </Suspense>
   );
 }

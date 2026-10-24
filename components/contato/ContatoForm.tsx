@@ -1,9 +1,10 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useId, useState } from "react";
+import { useId, useState, useTransition } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { Botao } from "@/components/ui/Button";
+import { enviarMensagem } from "@/server/acoes/contato";
 
 const assuntos = [
   { id: "pedido", rotulo: "Dúvida sobre um pedido" },
@@ -28,6 +29,8 @@ export function ContatoForm() {
   const [aceite, setAceite] = useState(false);
   const [erros, setErros] = useState<Erros>({});
   const [enviado, setEnviado] = useState(false);
+  const [erroEnvio, setErroEnvio] = useState<string | null>(null);
+  const [enviando, iniciar] = useTransition();
 
   function enviar(e: React.FormEvent) {
     e.preventDefault();
@@ -42,15 +45,20 @@ export function ContatoForm() {
       document.getElementById(`${uid}-${primeiro}`)?.focus();
       return;
     }
-    setEnviado(true);
+    setErroEnvio(null);
+    iniciar(async () => {
+      const r = await enviarMensagem({ nome, email, assunto: assunto as "outro", mensagem });
+      if (r.ok) setEnviado(true);
+      else setErroEnvio(r.erro);
+    });
   }
 
   if (enviado) {
     return (
       <div role="status" className="rounded-panel bg-mint p-8 text-center">
         <CheckCircle2 className="mx-auto size-14 text-forest" aria-hidden />
-        <h2 className="mt-3 font-display text-2xl font-bold">Mensagem recebida (demonstração)</h2>
-        <p className="mt-2 text-muted">Em uma loja real, a equipe responderia para {email} em horário comercial. Nada foi enviado a nenhum servidor.</p>
+        <h2 className="mt-3 font-display text-2xl font-bold">Mensagem enviada</h2>
+        <p className="mt-2 text-muted">Recebemos seu contato. A equipe responde para {email} em horário comercial.</p>
       </div>
     );
   }
@@ -108,8 +116,13 @@ export function ContatoForm() {
         </label>
         {erro("aceite")}
       </div>
-      <Botao type="submit" variante="primario" tamanho="l" className="justify-self-start">
-        Enviar mensagem
+      {erroEnvio && (
+        <p role="alert" className="text-sm font-semibold text-coral">
+          {erroEnvio}
+        </p>
+      )}
+      <Botao type="submit" variante="primario" tamanho="l" className="justify-self-start" disabled={enviando}>
+        {enviando ? "Enviando…" : "Enviar mensagem"}
       </Botao>
     </form>
   );

@@ -35,3 +35,22 @@ export function mascararCep(valor: string): string {
 export function formatarData(data: Date): string {
   return new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(data);
 }
+
+/** "24/10/2026 14:32" no fuso de Brasília, igual no servidor e no navegador. */
+export function formatarDataHora(data: Date): string {
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" }).format(data).replace(",", "");
+}
+
+/** "49,90", "R$ 1.234,56" ou "49.90" -> centavos (4990). null se não for um valor válido. */
+export function parseReais(texto: string): number | null {
+  const limpo = texto.replace(/[^\d,.]/g, "");
+  if (!limpo) return null;
+  const normal = limpo.includes(",") ? limpo.replace(/\./g, "").replace(",", ".") : limpo;
+  const n = Number(normal);
+  return Number.isFinite(n) && n >= 0 && n < 1_000_000 ? Math.round(n * 100) : null;
+}
+
+/** 4990 -> "49,90" (para preencher campos de formulário). */
+export function centavosParaCampo(centavos: number): string {
+  return (centavos / 100).toFixed(2).replace(".", ",");
+}

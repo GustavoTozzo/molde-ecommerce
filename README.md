@@ -12,8 +12,8 @@ Estudo que originou o layout: [`docs/estudo-de-referencia.md`](docs/estudo-de-re
 - [x] **Fase 2** — Banco de dados e camada de leitura (Prisma + Postgres, seed, repositório com `use cache`) — decisões em [`docs/decisoes-fase-2.md`](docs/decisoes-fase-2.md)
 - [x] **Fase 3** — Contas e autenticação (Auth.js, cadastro, login, área do cliente, favoritos persistidos) — decisões em [`docs/decisoes-fase-3.md`](docs/decisoes-fase-3.md)
 - [x] **Fase 4** — Checkout real (pedido em transação, estoque, cupons no servidor, pagamento simulado, upload de receita) — decisões em [`docs/decisoes-fase-4.md`](docs/decisoes-fase-4.md)
-- [ ] **Fase 5** — Painel administrativo (produtos, pedidos, fila de receitas, cupons, mensagens)
-- [ ] **Fase 6** — Formulários persistidos, testes automatizados e CI
+- [x] **Fase 5** — Painel administrativo (pedidos, fila de receitas, produtos e estoque, cupons, mensagens, usuários) — decisões em [`docs/decisoes-fase-5.md`](docs/decisoes-fase-5.md)
+- [ ] **Fase 6** — Testes de navegador dentro do repositório, CI (GitHub Actions) e revisão de acessibilidade/desempenho
 - [ ] **Fase 7** — Publicação (GitHub, Neon, Vercel)
 - [ ] **Fase 8** — Preparação para migrar o catálogo e o checkout para a Shopify
 
@@ -59,9 +59,11 @@ Criados por `npm run db:seed` com os valores de `.env` (padrões em `.env.exampl
 - **Checkout (`/checkout`, exige login):** endereço salvo ou novo, Pix / cartão (até 6x) / boleto **simulados**, upload real da receita (conferida pelos primeiros bytes do arquivo), pedido gravado em transação com baixa de estoque atômica, cupom e totais recalculados no servidor e chave de idempotência contra cobrança dupla. O número do cartão **não sai do navegador**: o servidor recebe só os 4 últimos dígitos.
 - **Pedidos (`/conta/pedidos/[id]`):** linha do tempo, QR Code e código do Pix fictícios, receita, itens, totais, entrega e cancelamento (devolve estoque e estorna).
 - **Conta (`/conta`):** cadastro e login reais (Auth.js v5, senha com bcrypt), resumo, endereços (até 5, com principal), dados pessoais, troca de senha, "meus pedidos" e **favoritos salvos na conta** (mesclados com os do navegador no primeiro login). `/conta`, `/admin` e `/checkout` ficam atrás do `proxy.ts`, e cada página e ação confere a sessão de novo no banco.
+- **Painel (`/admin`, equipe):** visão geral, pedidos (filtro, busca, envio com rastreio, entrega, cancelamento com estorno e trilha de auditoria), **fila de conferência de receitas** (aprovar ou recusar com motivo; o cliente reenvia), mensagens de contato, e, só para o administrador, produtos e estoque (cadastro/edição que reflete na vitrine na hora), cupons e usuários (papéis, bloqueio, equipe). Dois papéis: `FARMACEUTICO` e `ADMINISTRADOR`.
+- **Contato e newsletter** gravam no banco e aparecem no painel.
 - **Acessibilidade e segurança:** link "pular para o conteúdo", foco visível, `aria-*`, cabeçalhos HTTP (CSP, HSTS, `nosniff`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`).
 
-Verificação: build de produção lendo do Postgres, `tsc` e `eslint` sem erros, **19 testes de integração** (`npm run test`, inclui compras simultâneas disputando o último estoque) e, em Chrome headless, 55 verificações do site público, 37 de conta/autenticação e 35 de checkout.
+Verificação: build de produção lendo do Postgres, `tsc` e `eslint` sem erros, **24 testes de integração** (`npm run test`, inclui compras simultâneas disputando o último estoque) e, em Chrome headless, 55 verificações do site público, 37 de conta, 35 de checkout e 66 do painel (as suítes de navegador ainda ficam fora do repositório; entram na Fase 6).
 
 ## Estrutura
 
@@ -93,13 +95,14 @@ docs/                 estudo da referência, modelagem de dados, decisões por f
 | Catálogo, conteúdo, cupons | Banco Postgres, leitura com cache | 2 (pronto) |
 | Conta, login e endereços | Banco + Auth.js, sessão JWT de 7 dias | 3 (pronto) |
 | Favoritos | Banco (logado) ou localStorage (visitante) | 3 (pronto) |
-| Recuperação de senha e verificação de e-mail | Não existe (precisa de serviço de envio) | 7 |
 | Pedidos, estoque, totais, cupom | Banco, transação, recálculo no servidor | 4 (pronto) |
 | Pagamento | **Simulado** (Pix, boleto e cartão fictícios; botão "Simular pagamento") | trocar por gateway ao operar |
-| Receita | Upload real, guardada no banco (demonstração) | 4 (upload) e 5 (conferência pelo farmacêutico) |
+| Receita | Upload real, guardada no banco (demonstração); conferência pelo farmacêutico no painel | 4 e 5 (pronto) |
+| Contato e newsletter | Gravados no banco, lidos no painel (sem e-mail de resposta) | 5 (pronto) |
+| E-mail transacional e recuperação de senha | Não existem (precisam de serviço de envio) | 7 |
 | Assinaturas | Registro criado no pedido; sem geração de pedidos recorrentes | 8 (Shopify) |
 | Frete | Simulação por região do CEP | pós-Shopify / transportadora |
-| Avaliações | Exemplos marcados como fictícios | 6 |
+| Avaliações | Exemplos marcados como fictícios; sem envio de avaliação pelo cliente | futuro |
 
 ## Fora do escopo
 

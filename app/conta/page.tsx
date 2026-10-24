@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { Heart, LogOut, MapPin, Package, UserCog } from "lucide-react";
-import { Botao } from "@/components/ui/Button";
+import { Heart, LayoutDashboard, LogOut, MapPin, Package, UserCog } from "lucide-react";
+import { Botao, LinkBotao } from "@/components/ui/Button";
 import { prisma } from "@/server/prisma";
 import { sair } from "@/server/acoes/conta";
 import { exigirUsuario } from "@/server/sessao";
@@ -24,6 +24,11 @@ export default async function PaginaConta() {
     <div>
       <h2 className="font-display text-3xl font-bold text-forest-dark">Olá, {usuario.nome.split(/\s+/)[0]}</h2>
       <p className="mt-1 text-muted">{usuario.email}</p>
+      {(usuario.papel === "ADMINISTRADOR" || usuario.papel === "FARMACEUTICO") && (
+        <LinkBotao href="/admin" variante="primario" tamanho="m" className="mt-4">
+          <LayoutDashboard className="size-4" aria-hidden /> Ir para o painel da loja
+        </LinkBotao>
+      )}
       <ul className="mt-6 grid gap-4 sm:grid-cols-2">
         {atalhos.map(({ href, icone: Icone, titulo, detalhe }) => (
           <li key={href}>
