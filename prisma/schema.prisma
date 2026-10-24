@@ -62,15 +62,17 @@ enum TipoCupom {
 }
 
 model Usuario {
-  id           String   @id @default(cuid())
-  nome         String
-  email        String   @unique
-  senhaHash    String
-  telefone     String?
-  papel        Papel    @default(CLIENTE)
-  ativo        Boolean  @default(true)
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
+  id             String    @id @default(cuid())
+  nome           String
+  email          String    @unique
+  senhaHash      String
+  telefone       String?
+  papel          Papel     @default(CLIENTE)
+  ativo          Boolean   @default(true)
+  /// Quando a pessoa aceitou os termos e a política de privacidade (LGPD: prova do consentimento).
+  aceiteTermosEm DateTime?
+  criadoEm       DateTime  @default(now())
+  atualizadoEm   DateTime  @updatedAt
 
   enderecos         Endereco[]
   pedidos           Pedido[]

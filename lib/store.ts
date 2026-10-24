@@ -4,6 +4,7 @@ import { useMemo, useSyncExternalStore } from "react";
 import { useCatalogo } from "@/components/catalogo/CatalogoContext";
 import { calcularCarrinho, chaveItem, type Frequencia, type ItemCarrinho } from "@/lib/carrinho";
 import type { CupomAplicado } from "@/lib/types";
+import { alternarFavoritoNoServidor } from "@/server/acoes/conta";
 
 /**
  * Estado do navegador: carrinho, cupom exibido, favoritos de visitante e aviso.
@@ -15,12 +16,16 @@ interface State {
   cupom: CupomAplicado | null;
   receita: string | null;
   favoritos: string[];
+  /** Os favoritos vieram da conta (e não só deste navegador): ao sair, devem sumir daqui. */
+  favoritosDeConta: boolean;
+  /** Sessão ativa; informado pelo servidor via <SincronizarConta />, nunca persistido. */
+  logado: boolean;
   carrinhoAberto: boolean;
   aviso: { id: number; mensagem: string } | null;
 }
 
 const CHAVE = "casa-magistral:estado:v2";
-const inicial: State = { itens: [], cupom: null, receita: null, favoritos: [], carrinhoAberto: false, aviso: null };
+const inicial: State = { itens: [], cupom: null, receita: null, favoritos: [], favoritosDeConta: false, logado: false, carrinhoAberto: false, aviso: null };
 
 let state: State = inicial;
 let carregado = false;
@@ -33,8 +38,8 @@ function emitir() {
 
 function persistir() {
   try {
-    const { itens, cupom, receita, favoritos } = state;
-    localStorage.setItem(CHAVE, JSON.stringify({ itens, cupom, receita, favoritos }));
+    const { itens, cupom, receita, favoritos, favoritosDeConta } = state;
+    localStorage.setItem(CHAVE, JSON.stringify({ itens, cupom, receita, favoritos, favoritosDeConta }));
   } catch {
     /* armazenamento indisponível: segue sem persistir */
   }
@@ -53,6 +58,7 @@ function carregar() {
       cupom: lido.cupom ?? null,
       receita: lido.receita ?? null,
       favoritos: Array.isArray(lido.favoritos) ? lido.favoritos : [],
+      favoritosDeConta: lido.favoritosDeConta === true,
     };
   } catch {
     /* dados corrompidos: ignora */
@@ -79,7 +85,7 @@ function subscribe(listener: () => void) {
 function aoMudarOutraAba(e: StorageEvent) {
   if (e.key !== CHAVE) return;
   carregado = false;
-  state = { ...inicial, carrinhoAberto: state.carrinhoAberto };
+  state = { ...inicial, logado: state.logado, carrinhoAberto: state.carrinhoAberto };
   carregar();
   emitir();
 }
@@ -157,8 +163,33 @@ export function fecharCarrinho() {
 
 export function alternarFavorito(produto: { slug: string; nome: string }) {
   const ja = state.favoritos.includes(produto.slug);
-  definir({ favoritos: ja ? state.favoritos.filter((s) => s !== produto.slug) : [...state.favoritos, produto.slug] });
+  const antes = state.favoritos;
+  definir({ favoritos: ja ? antes.filter((s) => s !== produto.slug) : [...antes, produto.slug] });
   mostrarAviso(ja ? `${produto.nome} removido dos favoritos` : `${produto.nome} salvo nos favoritos`);
+  if (state.logado) {
+    // Atualização otimista: a tela muda na hora e o servidor confirma; se falhar, desfaz.
+    alternarFavoritoNoServidor(produto.slug).catch(() => {
+      definir({ favoritos: antes });
+      mostrarAviso("Não foi possível salvar o favorito. Tente de novo.");
+    });
+  }
+}
+
+export function favoritosAtuais(): string[] {
+  carregar();
+  return state.favoritos;
+}
+
+/** Chamado pelo servidor (via <SincronizarConta />) a cada carga: diz se há sessão e, com ela, traz os favoritos da conta. */
+export function definirSessao(logado: boolean, favoritosDaConta?: string[]) {
+  if (logado) {
+    definir({ logado: true, ...(favoritosDaConta && { favoritos: favoritosDaConta, favoritosDeConta: true }) });
+  } else if (state.favoritosDeConta) {
+    // Saiu da conta (ou a sessão expirou): não deixa os favoritos dela num navegador possivelmente compartilhado.
+    definir({ logado: false, favoritos: [], favoritosDeConta: false });
+  } else if (state.logado) {
+    definir({ logado: false }, false);
+  }
 }
 
 /* ---------- hooks de conveniência ---------- */

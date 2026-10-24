@@ -48,6 +48,7 @@ export function CarrinhoPagina() {
             <ResumoValores resumo={resumo} />
             <Link
               href="/checkout"
+              prefetch={false}
               aria-disabled={bloqueado}
               className={cn(classesBotao("primario", "l", "w-full"), bloqueado && "pointer-events-none opacity-50")}
             >

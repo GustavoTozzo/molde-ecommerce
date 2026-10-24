@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import { Bricolage_Grotesque, Figtree } from "next/font/google";
 import { site } from "@/lib/site";
 import { Aviso } from "@/components/layout/Aviso";
@@ -8,6 +9,8 @@ import { Rodape } from "@/components/layout/Rodape";
 import { WhatsappFlutuante } from "@/components/layout/WhatsappFlutuante";
 import { CarrinhoGaveta } from "@/components/carrinho/CarrinhoGaveta";
 import { CatalogoProvider } from "@/components/catalogo/CatalogoContext";
+import { ContaLink, ContaLinkEsqueleto, ContaLinkMobile, ContaLinkMobileEsqueleto } from "@/components/conta/ContaLink";
+import { SessaoDoServidor } from "@/components/conta/SessaoDoServidor";
 import { getCatalogo } from "@/server/catalogo";
 import "./globals.css";
 
@@ -36,7 +39,18 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         </a>
         <CatalogoProvider produtos={catalogo}>
           <BarraAvisos />
-          <Header />
+          <Header
+            conta={
+              <Suspense fallback={<ContaLinkEsqueleto />}>
+                <ContaLink />
+              </Suspense>
+            }
+            contaMobile={
+              <Suspense fallback={<ContaLinkMobileEsqueleto />}>
+                <ContaLinkMobile />
+              </Suspense>
+            }
+          />
           <main id="conteudo" className="flex-1">
             {children}
           </main>
@@ -44,6 +58,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <CarrinhoGaveta />
           <Aviso />
           <WhatsappFlutuante />
+          <Suspense>
+            <SessaoDoServidor />
+          </Suspense>
         </CatalogoProvider>
       </body>
     </html>

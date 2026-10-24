@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useId, useState } from "react";
-import { ChevronDown, CircleHelp, Heart, Menu, ShoppingBag, User, X } from "lucide-react";
+import { useEffect, useId, useState, type ReactNode } from "react";
+import { ChevronDown, CircleHelp, Heart, Menu, ShoppingBag, X } from "lucide-react";
 import { formas, objetivos } from "@/data/taxonomia";
 import { navPrincipal, site } from "@/lib/site";
 import { abrirCarrinho, useStore } from "@/lib/store";
@@ -64,7 +64,7 @@ function MegaMenu({ aoFechar }: { aoFechar: () => void }) {
   );
 }
 
-function MenuMobile({ aberto, aoFechar }: { aberto: boolean; aoFechar: () => void }) {
+function MenuMobile({ aberto, aoFechar, conta }: { aberto: boolean; aoFechar: () => void; conta: ReactNode }) {
   return (
     <Painel aberto={aberto} aoFechar={aoFechar} rotulo="Menu de navegação" lado="esquerda">
       <div className="flex items-center justify-between border-b border-line px-5 py-4">
@@ -126,9 +126,7 @@ function MenuMobile({ aberto, aoFechar }: { aberto: boolean; aoFechar: () => voi
           </ul>
         </nav>
         <div className="mt-6 grid gap-2">
-          <Link href="/entrar" onClick={aoFechar} className={classesBotao("secundario", "m", "w-full")}>
-            <User className="size-4" aria-hidden /> Entrar ou cadastrar-se
-          </Link>
+          <div onClick={aoFechar}>{conta}</div>
           <Link href="/contato" onClick={aoFechar} className={classesBotao("claro", "m", "w-full")}>
             <CircleHelp className="size-4" aria-hidden /> Precisa de ajuda?
           </Link>
@@ -138,7 +136,11 @@ function MenuMobile({ aberto, aoFechar }: { aberto: boolean; aoFechar: () => voi
   );
 }
 
-export function Header() {
+/**
+ * `conta` e `contaMobile` vêm do servidor (leem a sessão) dentro de <Suspense>: o resto do
+ * cabeçalho continua estático e só esse trecho chega por streaming.
+ */
+export function Header({ conta, contaMobile }: { conta: ReactNode; contaMobile: ReactNode }) {
   const pathname = usePathname();
   const megaId = useId();
   const [megaEm, setMegaEm] = useState<string | null>(null);
@@ -173,13 +175,7 @@ export function Header() {
         <Logo />
         <BuscaCampo className="hidden max-w-3xl flex-1 md:block" />
         <div className="ml-auto flex items-center gap-1 md:gap-5">
-          <Link href="/entrar" className="hidden items-center gap-2.5 rounded-full p-1.5 hover:bg-mint lg:flex">
-            <User className="size-6" aria-hidden />
-            <span className="text-left text-xs leading-tight">
-              Entrar ou
-              <strong className="block text-sm">cadastrar-se</strong>
-            </span>
-          </Link>
+          {conta}
           <Link href="/contato" aria-label="Ajuda" className="hidden items-center gap-2 rounded-full p-2 text-sm font-semibold hover:bg-mint md:flex">
             <CircleHelp className="size-6" aria-hidden />
             <span className="hidden xl:inline">Ajuda</span>
@@ -245,7 +241,7 @@ export function Header() {
         )}
       </div>
 
-      <MenuMobile aberto={mobileAberto} aoFechar={() => setMobileEm(null)} />
+      <MenuMobile aberto={mobileAberto} aoFechar={() => setMobileEm(null)} conta={contaMobile} />
     </header>
   );
 }

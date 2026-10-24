@@ -84,6 +84,7 @@ export function CarrinhoGaveta() {
             <div className="mt-4 grid gap-2">
               <LinkBotao
                 href="/checkout"
+                prefetch={false}
                 onClick={fecharCarrinho}
                 variante="primario"
                 tamanho="l"

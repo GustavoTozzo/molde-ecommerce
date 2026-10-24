@@ -10,7 +10,7 @@ Estudo que originou o layout: [`docs/estudo-de-referencia.md`](docs/estudo-de-re
 
 - [x] **Fase 1** — Front-end do molde com dados estáticos (estudo de referência, design system, 57 páginas)
 - [x] **Fase 2** — Banco de dados e camada de leitura (Prisma + Postgres, seed, repositório com `use cache`) — decisões em [`docs/decisoes-fase-2.md`](docs/decisoes-fase-2.md)
-- [ ] **Fase 3** — Contas e autenticação (Auth.js, cadastro, login, área do cliente, favoritos persistidos)
+- [x] **Fase 3** — Contas e autenticação (Auth.js, cadastro, login, área do cliente, favoritos persistidos) — decisões em [`docs/decisoes-fase-3.md`](docs/decisoes-fase-3.md)
 - [ ] **Fase 4** — Checkout real (pedido em transação, estoque, cupons no servidor, pagamento simulado, upload de receita)
 - [ ] **Fase 5** — Painel administrativo (produtos, pedidos, fila de receitas, cupons, mensagens)
 - [ ] **Fase 6** — Formulários persistidos, testes automatizados e CI
@@ -55,20 +55,22 @@ Criados por `npm run db:seed` com os valores de `.env` (padrões em `.env.exampl
 - **Catálogo (`/produtos`):** filtros por forma, objetivo, preço, receita e oferta; ordenação; busca tolerante a acentos (nome, forma, objetivo e ingrediente); filtros na URL.
 - **Produto (`/produtos/[slug]`):** galeria, tamanho e sabor, compra única ou assinatura, simulação de frete, aviso de venda com receita, tabela nutricional, avaliações, relacionados e JSON-LD.
 - **Carrinho:** gaveta e página `/carrinho`; **cupom validado no servidor** (tabela `cupons`); barra de frete grátis; anexo de receita (ainda simulado até a Fase 4).
+- **Conta (`/conta`):** cadastro e login reais (Auth.js v5, senha com bcrypt), resumo, endereços (até 5, com principal), dados pessoais, troca de senha, "meus pedidos" e **favoritos salvos na conta** (mesclados com os do navegador no primeiro login). `/conta`, `/admin` e `/checkout` ficam atrás do `proxy.ts`, e cada página e ação confere a sessão de novo no banco.
 - **Acessibilidade e segurança:** link "pular para o conteúdo", foco visível, `aria-*`, cabeçalhos HTTP (CSP, HSTS, `nosniff`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`).
 
-Verificação da Fase 2: build de produção (57 páginas lendo do Postgres), `tsc` e `eslint` sem erros, e 55 verificações de interação em Chrome headless.
+Verificação: build de produção lendo do Postgres, `tsc` e `eslint` sem erros, 55 verificações de interação do site público e 37 de conta/autenticação em Chrome headless.
 
 ## Estrutura
 
 ```
 app/                  rotas (App Router)
-components/           layout, home, produto, catalogo (+ CatalogoContext), carrinho, ui, ...
+components/           layout, home, produto, catalogo (+ CatalogoContext), carrinho, conta, ui, ...
 data/                 taxonomia, conteúdo editorial estático (FAQ/depoimentos), institucional
+auth.ts, proxy.ts     Auth.js (credenciais + JWT) e guarda de rotas
 lib/                  tipos, site.ts (marca e regras), store.ts (carrinho no navegador),
                       carrinho.ts (cálculo puro, usado no cliente e no servidor), catalogo.ts (busca/filtros)
 server/               prisma.ts (singleton), cliente-prisma.ts (fábrica), catalogo.ts (leitura com cache),
-                      cupons.ts, acoes/ (Server Actions)
+                      cupons.ts, sessao.ts (usuário conferido no banco), limite.ts, acoes/ (Server Actions)
 prisma/               schema.prisma, migrations/, seed.ts, dados/ (fonte do seed)
 docs/                 estudo da referência, modelagem de dados, decisões por fase
 ```
@@ -86,9 +88,10 @@ docs/                 estudo da referência, modelagem de dados, decisões por f
 | Tema | Hoje | Fase |
 |---|---|---|
 | Catálogo, conteúdo, cupons | Banco Postgres, leitura com cache | 2 (pronto) |
-| Conta e login | Formulário simulado | 3 |
-| Favoritos | localStorage | 3 |
-| Pedidos, estoque, totais | Confirmação simulada no navegador | 4 |
+| Conta, login e endereços | Banco + Auth.js, sessão JWT de 7 dias | 3 (pronto) |
+| Favoritos | Banco (logado) ou localStorage (visitante) | 3 (pronto) |
+| Recuperação de senha e verificação de e-mail | Não existe (precisa de serviço de envio) | 7 |
+| Pedidos, estoque, totais | `/checkout` exige login, mas a confirmação ainda é simulada no navegador | 4 |
 | Pagamento | Simulado (Pix, boleto e cartão fictícios) | 4 |
 | Receita | Guarda só o nome do arquivo | 4 (upload) e 5 (conferência) |
 | Frete | Simulação por região do CEP | pós-Shopify / transportadora |
