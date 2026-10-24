@@ -32,9 +32,9 @@ const SIMPLES = { slug: "magnesio-bisglicinato-300", tamanhoId: "30", preco: 499
 const COM_RECEITA = { slug: "vitamina-d3-50000" };
 
 let usuarioId = "";
-let estoqueOriginal = 0;
 let tamanhoDbId = "";
 let usosOriginais: { codigo: string; usos: number }[] = [];
+let estoquesOriginais: { id: string; estoque: number }[] = [];
 
 function entrada(extra: Partial<EntradaPedido> = {}): EntradaPedido {
   return {
@@ -64,12 +64,12 @@ before(async () => {
   usuarioId = usuario.id;
   const t = await prisma.tamanho.findFirstOrThrow({ where: { codigo: SIMPLES.tamanhoId, produto: { slug: SIMPLES.slug } } });
   tamanhoDbId = t.id;
-  estoqueOriginal = t.estoque;
   usosOriginais = await prisma.cupom.findMany({ select: { codigo: true, usos: true } });
+  estoquesOriginais = await prisma.tamanho.findMany({ select: { id: true, estoque: true } });
 });
 
 after(async () => {
-  await definirEstoque(estoqueOriginal);
+  for (const t of estoquesOriginais) await prisma.tamanho.update({ where: { id: t.id }, data: { estoque: t.estoque } });
   await prisma.cupom.deleteMany({ where: { codigo: { startsWith: "TESTE" } } });
   for (const c of usosOriginais) await prisma.cupom.updateMany({ where: { codigo: c.codigo }, data: { usos: c.usos } });
   await prisma.assinatura.deleteMany({ where: { usuarioId } });
