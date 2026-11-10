@@ -56,7 +56,7 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
-      - name: Banco: migrações e seed
+      - name: "Banco: migrações e seed"
         run: |
           npx prisma migrate deploy
           npm run db:seed
